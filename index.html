@@ -140,6 +140,21 @@
   instructions.style.display = isLocked ? 'none' : '';
 });
 
+const cursorMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffffff,
+  opacity: 0.5,
+  transparent: true
+});
+
+const cursorCube = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1),
+  cursorMaterial
+);
+
+cursorCube.renderOrder = 999; // ensure it's drawn on top
+scene.add(cursorCube);
+
+
 
   // === Movement
   const move = { forward: false, backward: false, left: false, right: false, up: false };
@@ -221,6 +236,16 @@
       controls.moveForward(velocity.z);
       camera.position.y += velocity.y;
     }
+
+    const dir = new THREE.Vector3();
+camera.getWorldDirection(dir);
+const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3));
+pos.x = Math.round(pos.x);
+pos.y = Math.round(pos.y);
+pos.z = Math.round(pos.z);
+cursorCube.position.copy(pos);
+cursorMaterial.color.set(options.cubeColor); // match GUI color
+
 
     renderer.render(scene, camera);
   }
