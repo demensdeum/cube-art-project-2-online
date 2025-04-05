@@ -26,6 +26,33 @@
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
   import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.18/+esm';
 
+  const i18n = {
+  en: {
+    showGrid: 'Show Grid',
+    showAxes: 'Show Axes',
+    cubeColor: 'Cube Color',
+    showCursor: 'Show Cursor',
+    background: 'Background',
+    moveSpeed: 'Move Speed',
+    saveScene: '💾 Save Scene',
+    loadScene: '📂 Load Scene',
+    instructions: 'Click to start editing',
+    Language: 'Language'
+  },
+  ru: {
+    showGrid: 'Показать сетку',
+    showAxes: 'Показать оси',
+    cubeColor: 'Цвет куба',
+    showCursor: 'Показать курсор',
+    background: 'Фон',
+    moveSpeed: 'Скорость перемещения',
+    saveScene: '💾 Сохранить сцену',
+    loadScene: '📂 Загрузить сцену',
+    instructions: 'Нажмите, чтобы начать редактирование',
+    Language: 'Язык'
+  }
+};
+
   // === PointerLockControls (inline) ===
   class PointerLockControls extends THREE.EventDispatcher {
     constructor(camera, domElement) {
@@ -223,25 +250,30 @@ scene.add(cursorCube);
   // === GUI controls for grid and axes
   const gui = new GUI();
   const options = {
-    grid: false,
-    axes: false,
-    cubeColor: '#ffffff',
-    cursorVisible: true,
-    speed: 10,
-    backgroundColor: '#000000'           
-  };
-  gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
-  gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
-  gui.addColor(options, 'cubeColor').name('Cube Color');
-  gui.add(options, 'cursorVisible').name('Show Cursor');
-  const bgController = gui.addColor(options, 'backgroundColor')
-  .name('Background')
-  .onChange(color => {
-    renderer.setClearColor(color);
+  grid: false,
+  axes: false,
+  cubeColor: '#ffffff',
+  cursorVisible: true,
+  speed: 10,
+  backgroundColor: '#000000',
+  language: 'en' // Default language
+};
+
+const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
+  .name(i18n[options.language].Language)
+  .onChange(() => {
+    translateGUI();
   });
-  gui.add(options, 'speed', 0.1, 100, 0.1).name('Move Speed');
-  gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
-  gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
+const gridController = gui.add(options, 'grid').name(i18n[options.language].showGrid).onChange(v => gridHelper.visible = v);
+const axesController = gui.add(options, 'axes').name(i18n[options.language].showAxes).onChange(v => axesHelper.visible = v);
+const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor);
+const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor);
+const bgController = gui.addColor(options, 'backgroundColor')
+  .name(i18n[options.language].background)
+  .onChange(color => renderer.setClearColor(color));
+const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed);
+const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene);
+const loadController = gui.add({ load: loadSceneFromFile }, 'load').name(i18n[options.language].loadScene);
 
   // === Grid + Axes (debug)
   const gridHelper = new THREE.GridHelper(10, 10);
@@ -350,6 +382,21 @@ cursorMaterial.visible = options.cursorVisible;
 
   input.click();
 }
+
+function translateGUI() {
+  gridController.name(i18n[options.language].showGrid);
+  axesController.name(i18n[options.language].showAxes);
+  colorController.name(i18n[options.language].cubeColor);
+  cursorController.name(i18n[options.language].showCursor);
+  bgController.name(i18n[options.language].background);
+  speedController.name(i18n[options.language].moveSpeed);
+  saveController.name(i18n[options.language].saveScene);
+  loadController.name(i18n[options.language].loadScene);
+  langController.name(i18n[options.language].Language);
+
+  //instructions.textContent = i18n[options.language].instructions;
+}
+
 
 function saveSceneToFile() {
   const cameraData = {
