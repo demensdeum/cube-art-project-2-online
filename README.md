@@ -3,7 +3,7 @@
 **Voxel-style editor for colorful cube-based creations.**  
 Craft pixel art, experiment with color, and build your own geometric art directly in the browser.
 
-![screenshot](https://raw.githubusercontent.com/demensdeum/cube-art-project-2/screenshot.png)
+![screenshot](screenshot.png)
 
 ---
 
