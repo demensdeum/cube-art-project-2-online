@@ -167,7 +167,7 @@ scene.add(cursorCube);
   const move = { forward: false, backward: false, left: false, right: false, up: false };
   const velocity = new THREE.Vector3();
   const direction = new THREE.Vector3();
-  const speed = 5;
+  //const speed = 5;
 
   document.addEventListener('keydown', e => {
     if (e.code === 'KeyW') move.forward = true;
@@ -238,12 +238,14 @@ scene.add(cursorCube);
     grid: true,
     axes: true,
     cubeColor: '#ffffff',
-    cursorVisible: true     
+    cursorVisible: true,
+    speed: 10         
   };
   gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
   gui.addColor(options, 'cubeColor').name('Cube Color');
   gui.add(options, 'cursorVisible').name('Show Cursor');
+  gui.add(options, 'speed', 0.1, 100, 0.1).name('Move Speed');
   gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
   gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
 
@@ -260,9 +262,9 @@ scene.add(cursorCube);
     direction.normalize();
 
     if (controls.isLocked) {
-      velocity.x = direction.x * speed * delta;
-      velocity.z = direction.z * speed * delta;
-      velocity.y = move.up ? speed * delta : 0;
+      velocity.x = direction.x * options.speed * delta;
+      velocity.z = direction.z * options.speed * delta;
+      velocity.y = move.up ? options.speed * delta : 0;
 
       controls.moveRight(velocity.x);
       controls.moveForward(velocity.z);
