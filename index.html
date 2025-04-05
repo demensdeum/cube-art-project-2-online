@@ -180,29 +180,48 @@ scene.add(cursorCube);
   });
 
   function placeCubeInFront() {
-  const distance = 3; // how far in front of the camera
+  const distance = 3;
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
 
   const position = new THREE.Vector3();
   position.copy(camera.position).add(dir.multiplyScalar(distance));
 
-  // Snap to integer grid
+  // Snap to grid
   position.x = Math.round(position.x);
   position.y = Math.round(position.y);
   position.z = Math.round(position.z);
 
-  const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(options.cubeColor) });
+  // Search for existing cube
+  const existingIndex = data.cubes.findIndex(([x, y, z]) =>
+    x === position.x && y === position.y && z === position.z
+  );
+
+  if (existingIndex !== -1) {
+    // ✅ Remove cube from scene
+    const toRemove = scene.children.find(obj =>
+      obj.isMesh &&
+      obj.geometry.type === 'BoxGeometry' &&
+      obj.position.x === position.x &&
+      obj.position.y === position.y &&
+      obj.position.z === position.z &&
+      obj != cursorCube
+    );
+    if (toRemove) scene.remove(toRemove);
+
+    // ✅ Remove from data.cubes
+    data.cubes.splice(existingIndex, 1);
+    return;
+  }
+
+  // ➕ Otherwise, place new cube
+  const hexColor = new THREE.Color(options.cubeColor).getHex();
+  const material = new THREE.MeshBasicMaterial({ color: hexColor });
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
   cube.position.copy(position);
   scene.add(cube);
 
-  data.cubes.push([
-    position.x,
-    position.y,
-    position.z,
-    hexColor
-  ]);  
+  data.cubes.push([position.x, position.y, position.z, hexColor]);
 }
 
 
