@@ -177,7 +177,7 @@
   position.y = Math.round(position.y);
   position.z = Math.round(position.z);
 
-  const material = new THREE.MeshBasicMaterial({ color: 0xffffff * Math.random() });
+  const material = new THREE.MeshBasicMaterial({ color: new THREE.Color(options.cubeColor) });
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
   cube.position.copy(position);
   scene.add(cube);
@@ -188,10 +188,12 @@
   const gui = new GUI();
   const options = {
     grid: true,
-    axes: true
+    axes: true,
+    cubeColor: '#ffffff'
   };
   gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
+  gui.addColor(options, 'cubeColor').name('Cube Color');
 
   // === Animate
   const clock = new THREE.Clock();
