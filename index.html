@@ -246,9 +246,11 @@ scene.add(cursorCube);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
   gui.addColor(options, 'cubeColor').name('Cube Color');
   gui.add(options, 'cursorVisible').name('Show Cursor');
-  gui.addColor(options, 'backgroundColor').name('Background').onChange(color => {
+  const bgController = gui.addColor(options, 'backgroundColor')
+  .name('Background')
+  .onChange(color => {
     renderer.setClearColor(color);
-  });  
+  });
   gui.add(options, 'speed', 0.1, 100, 0.1).name('Move Speed');
   gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
   gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
@@ -306,6 +308,8 @@ cursorMaterial.visible = options.cursorVisible;
         // If old format: just an array
         const cubes = Array.isArray(loaded) ? loaded : loaded.cubes;
         const cameraData = loaded.camera;
+        const background = loaded.backgroundColor;
+
 
         // Remove current cubes
         scene.children
@@ -331,6 +335,13 @@ cursorMaterial.visible = options.cursorVisible;
           camera.rotation.set(rx, ry, rz);
         }
 
+        if (background) {
+  options.backgroundColor = background;
+  renderer.setClearColor(background);
+  bgController.updateDisplay(); // ✅ correct usage
+}
+        
+
         console.log('Scene loaded:', data.cubes.length, 'cubes');
 
       } catch (err) {
@@ -352,20 +363,22 @@ function saveSceneToFile() {
 
   const sceneData = {
     camera: cameraData,
-    cubes: data.cubes
+    cubes: data.cubes,
+    backgroundColor: options.backgroundColor // ✅ include background color
   };
 
   const json = JSON.stringify(sceneData, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  
+
   const a = document.createElement('a');
   a.href = url;
   a.download = 'scene.cartp2';
   a.click();
 
-  URL.revokeObjectURL(url); // cleanup
+  URL.revokeObjectURL(url);
 }
+
 
 
 
