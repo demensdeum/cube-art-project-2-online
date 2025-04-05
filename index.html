@@ -14,13 +14,13 @@
       color: white;
       font-size: 24px;
       user-select: none;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(0, 0, 0, 0);
       padding-top: 20vh;
     }
   </style>
 </head>
 <body>
-  <div id="instructions">SELECTION MODE</div>
+  <div id="instructions"><!--SELECTION MODE--></div>
 
 <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
@@ -114,12 +114,6 @@
   // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
   // directionalLight.position.set(5, 10, 5);
   // scene.add(directionalLight);
-
-  // === Grid + Axes (debug)
-  const gridHelper = new THREE.GridHelper(10, 10);
-  scene.add(gridHelper);
-  const axesHelper = new THREE.AxesHelper(2);
-  scene.add(axesHelper);
 
   // === Create Cubes
   const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -235,8 +229,8 @@ scene.add(cursorCube);
   // === GUI controls for grid and axes
   const gui = new GUI();
   const options = {
-    grid: true,
-    axes: true,
+    grid: false,
+    axes: false,
     cubeColor: '#ffffff',
     cursorVisible: true,
     speed: 10,
@@ -255,7 +249,14 @@ scene.add(cursorCube);
   gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
   gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
 
+  // === Grid + Axes (debug)
+  const gridHelper = new THREE.GridHelper(10, 10);
+  gridHelper.visible = options.grid;
+  scene.add(gridHelper);
 
+  const axesHelper = new THREE.AxesHelper(2);
+  axesHelper.visible = options.axes;
+  scene.add(axesHelper);
 
   // === Animate
   const clock = new THREE.Clock();
