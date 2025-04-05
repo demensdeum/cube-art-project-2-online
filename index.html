@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Three.js FPS + GUI + Resize</title>
+  <title>Three.js Instancing FPS</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -20,13 +20,12 @@
   </style>
 </head>
 <body>
-  <div id="instructions"><!--SELECTION MODE--></div>
+  <div id="instructions">Click to enter</div>
 
 <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
   import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.18/+esm';
 
-  // === PointerLockControls (inline) ===
   class PointerLockControls extends THREE.EventDispatcher {
     constructor(camera, domElement) {
       super();
@@ -88,18 +87,16 @@
     }
   }
 
-  // === Cube Data ===
   const data = {
     cubes: [
-      [-1, 1, 0, 0xff0000],
-      [ 0, 1, 0, 0x00ff00],
-      [ 1, 1, 0, 0x0000ff],
-      [ 0, 0, 0, 0xffff00],
-      [ 0, 2, 0, 0xff00ff]
+      [-1, 1, 0],
+      [ 0, 1, 0],
+      [ 1, 1, 0],
+      [ 0, 0, 0],
+      [ 0, 2, 0]
     ]
   };
 
-  // === Scene Setup ===
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 1.5, 5);
@@ -108,23 +105,25 @@
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // === Lights ===
-  // const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-  // scene.add(ambientLight);
-  // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  // directionalLight.position.set(5, 10, 5);
-  // scene.add(directionalLight);
+  const texture = new THREE.TextureLoader().load('https://dummyimage.com/64x64/ff0000/ffffff&text=+');
+  const instancedMaterial = new THREE.MeshBasicMaterial({ map: texture });
+  const instancedGeometry = new THREE.BoxGeometry(1, 1, 1);
+  let instancedMesh;
+  const dummy = new THREE.Object3D();
 
-  // === Create Cubes
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  data.cubes.forEach(([x, y, z, hex]) => {
-    const material = new THREE.MeshBasicMaterial({ color: hex });
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(x, y, z);
-    scene.add(cube);
-  });
+  function rebuildInstancedMesh() {
+    if (instancedMesh) scene.remove(instancedMesh);
+    instancedMesh = new THREE.InstancedMesh(instancedGeometry, instancedMaterial, data.cubes.length);
+    data.cubes.forEach(([x, y, z], i) => {
+      dummy.position.set(x, y, z);
+      dummy.updateMatrix();
+      instancedMesh.setMatrixAt(i, dummy.matrix);
+    });
+    scene.add(instancedMesh);
+  }
 
-  // === Controls
+  rebuildInstancedMesh();
+
   const controls = new PointerLockControls(camera, document.body);
   scene.add(controls.getObject());
 
@@ -132,36 +131,18 @@
   instructions.addEventListener('click', () => controls.lock());
 
   document.addEventListener('pointerlockchange', () => {
-  const isLocked = document.pointerLockElement === document.body;
-  instructions.style.display = isLocked ? 'none' : '';
-});
+    instructions.style.display = document.pointerLockElement === document.body ? 'none' : '';
+  });
 
-document.body.addEventListener('click', (event) => {
-  // Only place cube when pointer lock is active
-  if (document.pointerLockElement === document.body) {
-    placeCubeInFront();
-  }
-});
+  document.body.addEventListener('click', () => {
+    if (document.pointerLockElement === document.body) {
+      placeCubeInFront();
+    }
+  });
 
-const cursorMaterial = new THREE.MeshBasicMaterial({
-  color: 0xffffff,
-  opacity: 0.5,
-  transparent: true
-});
-
-const cursorCube = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  cursorMaterial
-);
-
-cursorCube.renderOrder = 999; // ensure it's drawn on top
-scene.add(cursorCube);
-
-  // === Movement
   const move = { forward: false, backward: false, left: false, right: false, up: false };
   const velocity = new THREE.Vector3();
   const direction = new THREE.Vector3();
-  //const speed = 5;
 
   document.addEventListener('keydown', e => {
     if (e.code === 'KeyW') move.forward = true;
@@ -181,75 +162,55 @@ scene.add(cursorCube);
   });
 
   function placeCubeInFront() {
-  const distance = 3;
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
+    const distance = 3;
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
 
-  const position = new THREE.Vector3();
-  position.copy(camera.position).add(dir.multiplyScalar(distance));
+    const position = new THREE.Vector3();
+    position.copy(camera.position).add(dir.multiplyScalar(distance));
+    position.x = Math.round(position.x);
+    position.y = Math.round(position.y);
+    position.z = Math.round(position.z);
 
-  // Snap to grid
-  position.x = Math.round(position.x);
-  position.y = Math.round(position.y);
-  position.z = Math.round(position.z);
-
-  // Search for existing cube
-  const existingIndex = data.cubes.findIndex(([x, y, z]) =>
-    x === position.x && y === position.y && z === position.z
-  );
-
-  if (existingIndex !== -1) {
-    // ✅ Remove cube from scene
-    const toRemove = scene.children.find(obj =>
-      obj.isMesh &&
-      obj.geometry.type === 'BoxGeometry' &&
-      obj.position.x === position.x &&
-      obj.position.y === position.y &&
-      obj.position.z === position.z &&
-      obj != cursorCube
+    const existingIndex = data.cubes.findIndex(([x, y, z]) =>
+      x === position.x && y === position.y && z === position.z
     );
-    if (toRemove) scene.remove(toRemove);
 
-    // ✅ Remove from data.cubes
-    data.cubes.splice(existingIndex, 1);
-    return;
+    if (existingIndex !== -1) {
+      data.cubes.splice(existingIndex, 1);
+    } else {
+      data.cubes.push([position.x, position.y, position.z]);
+    }
+
+    rebuildInstancedMesh();
   }
 
-  // ➕ Otherwise, place new cube
-  const hexColor = new THREE.Color(options.cubeColor).getHex();
-  const material = new THREE.MeshBasicMaterial({ color: hexColor });
-  const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
-  cube.position.copy(position);
-  scene.add(cube);
+  const cursorMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    opacity: 0.5,
+    transparent: true
+  });
+  const cursorCube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), cursorMaterial);
+  cursorCube.renderOrder = 999;
+  scene.add(cursorCube);
 
-  data.cubes.push([position.x, position.y, position.z, hexColor]);
-}
-
-
-  // === GUI controls for grid and axes
-  const gui = new GUI();
   const options = {
     grid: false,
     axes: false,
-    cubeColor: '#ffffff',
-    cursorVisible: true,
     speed: 10,
-    backgroundColor: '#000000'           
+    backgroundColor: '#000000',
+    cursorVisible: true
   };
+
+  const gui = new GUI();
   gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
-  gui.addColor(options, 'cubeColor').name('Cube Color');
   gui.add(options, 'cursorVisible').name('Show Cursor');
-  const bgController = gui.addColor(options, 'backgroundColor')
-  .name('Background')
-  .onChange(color => {
+  gui.addColor(options, 'backgroundColor').name('Background').onChange(color => {
     renderer.setClearColor(color);
   });
   gui.add(options, 'speed', 0.1, 100, 0.1).name('Move Speed');
-  gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
-  gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
 
-  // === Grid + Axes (debug)
   const gridHelper = new THREE.GridHelper(10, 10);
   gridHelper.visible = options.grid;
   scene.add(gridHelper);
@@ -258,8 +219,8 @@ scene.add(cursorCube);
   axesHelper.visible = options.axes;
   scene.add(axesHelper);
 
-  // === Animate
   const clock = new THREE.Clock();
+
   function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
@@ -279,113 +240,21 @@ scene.add(cursorCube);
     }
 
     const dir = new THREE.Vector3();
-camera.getWorldDirection(dir);
-const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3));
-pos.x = Math.round(pos.x);
-pos.y = Math.round(pos.y);
-pos.z = Math.round(pos.z);
-cursorCube.position.copy(pos);
-cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0;
-cursorMaterial.visible = options.cursorVisible;
+    camera.getWorldDirection(dir);
+    const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3));
+    pos.x = Math.round(pos.x);
+    pos.y = Math.round(pos.y);
+    pos.z = Math.round(pos.z);
+    cursorCube.position.copy(pos);
+    cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0;
+    cursorMaterial.visible = options.cursorVisible;
 
     renderer.setClearColor(options.backgroundColor);
     renderer.render(scene, camera);
   }
 
-  function loadSceneFromFile() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.cartp2,application/json';
-
-  input.onchange = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const loaded = JSON.parse(e.target.result);
-
-        // If old format: just an array
-        const cubes = Array.isArray(loaded) ? loaded : loaded.cubes;
-        const cameraData = loaded.camera;
-        const background = loaded.backgroundColor;
-
-
-        // Remove current cubes
-        scene.children
-          .filter(obj => obj.isMesh && obj.geometry.type === 'BoxGeometry' && obj !== cursorCube)
-          .forEach(cube => scene.remove(cube));
-
-        // Update data and re-add
-        data.cubes = cubes;
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-        data.cubes.forEach(([x, y, z, hex]) => {
-          const material = new THREE.MeshBasicMaterial({ color: hex });
-          const cube = new THREE.Mesh(geometry, material);
-          cube.position.set(x, y, z);
-          scene.add(cube);
-        });
-
-        // Restore camera
-        if (cameraData) {
-          const [px, py, pz] = cameraData.position || [0, 0, 5];
-          const [rx, ry, rz] = cameraData.rotation || [0, 0, 0];
-          camera.position.set(px, py, pz);
-          camera.rotation.set(rx, ry, rz);
-        }
-
-        if (background) {
-  options.backgroundColor = background;
-  renderer.setClearColor(background);
-  bgController.updateDisplay(); // ✅ correct usage
-}
-        
-
-        console.log('Scene loaded:', data.cubes.length, 'cubes');
-
-      } catch (err) {
-        alert('Failed to load scene file: ' + err.message);
-      }
-    };
-
-    reader.readAsText(file);
-  };
-
-  input.click();
-}
-
-function saveSceneToFile() {
-  const cameraData = {
-    position: [camera.position.x, camera.position.y, camera.position.z],
-    rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z]
-  };
-
-  const sceneData = {
-    camera: cameraData,
-    cubes: data.cubes,
-    backgroundColor: options.backgroundColor // ✅ include background color
-  };
-
-  const json = JSON.stringify(sceneData, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'scene.cartp2';
-  a.click();
-
-  URL.revokeObjectURL(url);
-}
-
-
-
-
   animate();
 
-  // === Resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
