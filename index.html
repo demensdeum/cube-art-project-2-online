@@ -8,17 +8,19 @@
     canvas { display: block; }
     #instructions {
       position: absolute;
-      top: 50%;
       width: 100%;
+      height: 100%;
       text-align: center;
       color: white;
       font-size: 24px;
       user-select: none;
+      background: rgba(0, 0, 0, 0.5);
+      padding-top: 20vh;
     }
   </style>
 </head>
 <body>
-  <div id="instructions">Click to play</div>
+  <div id="instructions">SELECTION MODE</div>
 
 <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
@@ -140,6 +142,13 @@
   instructions.style.display = isLocked ? 'none' : '';
 });
 
+document.body.addEventListener('click', (event) => {
+  // Only place cube when pointer lock is active
+  if (document.pointerLockElement === document.body) {
+    placeCubeInFront();
+  }
+});
+
 const cursorMaterial = new THREE.MeshBasicMaterial({
   color: 0xffffff,
   opacity: 0.5,
@@ -153,8 +162,6 @@ const cursorCube = new THREE.Mesh(
 
 cursorCube.renderOrder = 999; // ensure it's drawn on top
 scene.add(cursorCube);
-
-
 
   // === Movement
   const move = { forward: false, backward: false, left: false, right: false, up: false };
