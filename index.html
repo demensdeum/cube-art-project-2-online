@@ -297,13 +297,17 @@ cursorMaterial.visible = options.cursorVisible;
       try {
         const loaded = JSON.parse(e.target.result);
 
+        // If old format: just an array
+        const cubes = Array.isArray(loaded) ? loaded : loaded.cubes;
+        const cameraData = loaded.camera;
+
         // Remove current cubes
         scene.children
           .filter(obj => obj.isMesh && obj.geometry.type === 'BoxGeometry' && obj !== cursorCube)
           .forEach(cube => scene.remove(cube));
 
         // Update data and re-add
-        data.cubes = loaded;
+        data.cubes = cubes;
         const geometry = new THREE.BoxGeometry(1, 1, 1);
 
         data.cubes.forEach(([x, y, z, hex]) => {
@@ -312,6 +316,14 @@ cursorMaterial.visible = options.cursorVisible;
           cube.position.set(x, y, z);
           scene.add(cube);
         });
+
+        // Restore camera
+        if (cameraData) {
+          const [px, py, pz] = cameraData.position || [0, 0, 5];
+          const [rx, ry, rz] = cameraData.rotation || [0, 0, 0];
+          camera.position.set(px, py, pz);
+          camera.rotation.set(rx, ry, rz);
+        }
 
         console.log('Scene loaded:', data.cubes.length, 'cubes');
 
@@ -326,8 +338,18 @@ cursorMaterial.visible = options.cursorVisible;
   input.click();
 }
 
-  function saveSceneToFile() {
-  const json = JSON.stringify(data.cubes);
+function saveSceneToFile() {
+  const cameraData = {
+    position: [camera.position.x, camera.position.y, camera.position.z],
+    rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z]
+  };
+
+  const sceneData = {
+    camera: cameraData,
+    cubes: data.cubes
+  };
+
+  const json = JSON.stringify(sceneData, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   
@@ -338,6 +360,7 @@ cursorMaterial.visible = options.cursorVisible;
 
   URL.revokeObjectURL(url); // cleanup
 }
+
 
 
   animate();
