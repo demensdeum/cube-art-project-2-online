@@ -239,12 +239,16 @@ scene.add(cursorCube);
     axes: true,
     cubeColor: '#ffffff',
     cursorVisible: true,
-    speed: 10         
+    speed: 10,
+    backgroundColor: '#000000'           
   };
   gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
   gui.addColor(options, 'cubeColor').name('Cube Color');
   gui.add(options, 'cursorVisible').name('Show Cursor');
+  gui.addColor(options, 'backgroundColor').name('Background').onChange(color => {
+    renderer.setClearColor(color);
+  });  
   gui.add(options, 'speed', 0.1, 100, 0.1).name('Move Speed');
   gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
   gui.add({ load: loadSceneFromFile }, 'load').name('📂 Load Scene');
@@ -281,7 +285,7 @@ cursorCube.position.copy(pos);
 cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0;
 cursorMaterial.visible = options.cursorVisible;
 
-
+    renderer.setClearColor(options.backgroundColor);
     renderer.render(scene, camera);
   }
 
