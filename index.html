@@ -237,11 +237,13 @@ scene.add(cursorCube);
   const options = {
     grid: true,
     axes: true,
-    cubeColor: '#ffffff'
+    cubeColor: '#ffffff',
+    cursorVisible: true     
   };
   gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
   gui.addColor(options, 'cubeColor').name('Cube Color');
+  gui.add(options, 'cursorVisible').name('Show Cursor');
 
   // === Animate
   const clock = new THREE.Clock();
@@ -270,7 +272,8 @@ pos.x = Math.round(pos.x);
 pos.y = Math.round(pos.y);
 pos.z = Math.round(pos.z);
 cursorCube.position.copy(pos);
-cursorMaterial.color.set(options.cubeColor); // match GUI color
+cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0;
+cursorMaterial.visible = options.cursorVisible;
 
 
     renderer.render(scene, camera);
