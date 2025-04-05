@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Three.js RGB Atlas Instancing</title>
+  <title>Three.js RGB Instanced Cubes</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -20,10 +20,11 @@
 </head>
 <body>
   <div id="instructions">Click to start</div>
-
-<script type="module">
+  <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
+import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.18/+esm';
 
+// === Pointer Lock Controls ===
 class PointerLockControls extends THREE.EventDispatcher {
   constructor(camera, domElement) {
     super();
@@ -85,7 +86,7 @@ class PointerLockControls extends THREE.EventDispatcher {
   }
 }
 
-// ==== Scene Setup ====
+// === Scene Setup ===
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.set(0, 1.5, 5);
@@ -94,46 +95,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// ==== RGB Atlas Texture ====
-const canvas = document.createElement('canvas');
-canvas.width = 3;
-canvas.height = 1;
-const ctx = canvas.getContext('2d');
-ctx.fillStyle = 'red'; ctx.fillRect(0, 0, 1, 1);
-ctx.fillStyle = 'green'; ctx.fillRect(1, 0, 1, 1);
-ctx.fillStyle = 'blue'; ctx.fillRect(2, 0, 1, 1);
-const atlasTexture = new THREE.CanvasTexture(canvas);
-atlasTexture.minFilter = THREE.NearestFilter;
-atlasTexture.magFilter = THREE.NearestFilter;
-
-// ==== Shader Material ====
-const vertexShader = `
-  attribute float offsetIndex;
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    vUv.x = uv.x / 3.0 + offsetIndex / 3.0;
-    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
-  }
-`;
-
-const fragmentShader = `
-  varying vec2 vUv;
-  uniform sampler2D map;
-  void main() {
-    gl_FragColor = texture2D(map, vUv);
-  }
-`;
-
-const instancedMaterial = new THREE.ShaderMaterial({
-  uniforms: {
-    map: { value: atlasTexture }
-  },
-  vertexShader,
-  fragmentShader
-});
-
-// ==== Cube Data ====
+// === Data ===
 const data = {
   cubes: [
     [-1, 1, 0],
@@ -142,9 +104,38 @@ const data = {
     [ 0, 0, 0],
     [ 0, 2, 0]
   ],
-  colors: [] // 0 = red, 1 = green, 2 = blue
+  colors: [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [1, 1, 0],
+    [1, 0, 1]
+  ]
 };
 
+// === Shader Material ===
+const vertexShader = `
+  attribute vec3 instanceColor;
+  varying vec3 vColor;
+  void main() {
+    vColor = instanceColor;
+    gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  }
+`;
+
+const fragmentShader = `
+  varying vec3 vColor;
+  void main() {
+    gl_FragColor = vec4(vColor, 1.0);
+  }
+`;
+
+const shaderMaterial = new THREE.ShaderMaterial({
+  vertexShader,
+  fragmentShader
+});
+
+// === Geometry + Mesh ===
 const geometry = new THREE.BoxGeometry(1, 1, 1);
 const dummy = new THREE.Object3D();
 let instancedMesh;
@@ -153,26 +144,24 @@ function rebuildInstancedMesh() {
   if (instancedMesh) scene.remove(instancedMesh);
 
   const count = data.cubes.length;
-  instancedMesh = new THREE.InstancedMesh(geometry, instancedMaterial, count);
+  instancedMesh = new THREE.InstancedMesh(geometry, shaderMaterial, count);
 
-  const colorIndices = new Float32Array(count);
-
+  const colorArray = new Float32Array(count * 3);
   data.cubes.forEach(([x, y, z], i) => {
     dummy.position.set(x, y, z);
     dummy.updateMatrix();
     instancedMesh.setMatrixAt(i, dummy.matrix);
-    const colorIndex = data.colors[i] ?? Math.floor(Math.random() * 3);
-    data.colors[i] = colorIndex;
-    colorIndices[i] = colorIndex;
+    const [r, g, b] = data.colors[i];
+    colorArray.set([r, g, b], i * 3);
   });
 
-  geometry.setAttribute('offsetIndex', new THREE.InstancedBufferAttribute(colorIndices, 1));
+  geometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(colorArray, 3));
   scene.add(instancedMesh);
 }
 
 rebuildInstancedMesh();
 
-// ==== Controls ====
+// === Controls ===
 const controls = new PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
 
@@ -182,7 +171,7 @@ document.addEventListener('pointerlockchange', () => {
   instructions.style.display = document.pointerLockElement === document.body ? 'none' : '';
 });
 
-// ==== Movement ====
+// === Movement ===
 const move = { forward: false, backward: false, left: false, right: false, up: false };
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
@@ -210,7 +199,7 @@ document.body.addEventListener('click', () => {
   }
 });
 
-// ==== Place Cube Logic ====
+// === Cube Placement ===
 function placeCubeInFront() {
   const distance = 3;
   const dir = new THREE.Vector3();
@@ -229,14 +218,24 @@ function placeCubeInFront() {
     data.cubes.splice(existingIndex, 1);
     data.colors.splice(existingIndex, 1);
   } else {
+    const color = new THREE.Color(options.cubeColor);
     data.cubes.push([position.x, position.y, position.z]);
-    data.colors.push(Math.floor(Math.random() * 3));
+    data.colors.push([color.r, color.g, color.b]);
   }
 
   rebuildInstancedMesh();
 }
 
-// ==== Animate ====
+// === GUI ===
+const gui = new GUI();
+const options = {
+  speed: 10,
+  cubeColor: '#ffffff'
+};
+gui.addColor(options, 'cubeColor').name('Cube Color');
+gui.add(options, 'speed', 0.1, 50, 0.1).name('Move Speed');
+
+// === Animate ===
 const clock = new THREE.Clock();
 
 function animate() {
@@ -248,9 +247,9 @@ function animate() {
   direction.normalize();
 
   if (controls.isLocked) {
-    velocity.x = direction.x * 10 * delta;
-    velocity.z = direction.z * 10 * delta;
-    velocity.y = move.up ? 10 * delta : 0;
+    velocity.x = direction.x * options.speed * delta;
+    velocity.z = direction.z * options.speed * delta;
+    velocity.y = move.up ? options.speed * delta : 0;
 
     controls.moveRight(velocity.x);
     controls.moveForward(velocity.z);
