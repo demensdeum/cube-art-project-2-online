@@ -244,6 +244,8 @@ scene.add(cursorCube);
   gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
   gui.addColor(options, 'cubeColor').name('Cube Color');
   gui.add(options, 'cursorVisible').name('Show Cursor');
+  gui.add({ save: saveSceneToFile }, 'save').name('💾 Save Scene');
+
 
   // === Animate
   const clock = new THREE.Clock();
@@ -278,6 +280,20 @@ cursorMaterial.visible = options.cursorVisible;
 
     renderer.render(scene, camera);
   }
+
+  function saveSceneToFile() {
+  const json = JSON.stringify(data.cubes);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'scene.cartp2';
+  a.click();
+
+  URL.revokeObjectURL(url); // cleanup
+}
+
 
   animate();
 
