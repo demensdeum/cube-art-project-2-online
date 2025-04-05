@@ -181,6 +181,13 @@
   const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
   cube.position.copy(position);
   scene.add(cube);
+
+  data.cubes.push([
+    position.x,
+    position.y,
+    position.z,
+    hexColor
+  ]);  
 }
 
 
