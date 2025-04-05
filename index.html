@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Three.js FPS + Move Up with Space</title>
+  <title>Three.js FPS + GUI + Resize</title>
   <style>
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
@@ -22,6 +22,7 @@
 
 <script type="module">
   import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
+  import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.18/+esm';
 
   // === PointerLockControls (inline) ===
   class PointerLockControls extends THREE.EventDispatcher {
@@ -33,26 +34,20 @@
       const scope = this;
       const euler = new THREE.Euler(0, 0, 0, 'YXZ');
       const PI_2 = Math.PI / 2;
-      const changeEvent = { type: 'change' };
-      const lockEvent = { type: 'lock' };
-      const unlockEvent = { type: 'unlock' };
 
       function onMouseMove(event) {
         if (!scope.isLocked) return;
         const movementX = event.movementX || 0;
         const movementY = event.movementY || 0;
-
         euler.setFromQuaternion(camera.quaternion);
         euler.y -= movementX * 0.002;
         euler.x -= movementY * 0.002;
         euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
         camera.quaternion.setFromEuler(euler);
-        scope.dispatchEvent(changeEvent);
       }
 
       function onPointerlockChange() {
         scope.isLocked = document.pointerLockElement === domElement;
-        scope.dispatchEvent(scope.isLocked ? lockEvent : unlockEvent);
       }
 
       function onPointerlockError() {
@@ -65,25 +60,9 @@
         document.addEventListener('pointerlockerror', onPointerlockError);
       };
 
-      this.disconnect = function () {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('pointerlockchange', onPointerlockChange);
-        document.removeEventListener('pointerlockerror', onPointerlockError);
-      };
-
-      this.dispose = function () {
-        this.disconnect();
-      };
-
       this.getObject = () => camera;
-
-      this.lock = () => {
-        domElement.requestPointerLock();
-      };
-
-      this.unlock = () => {
-        document.exitPointerLock();
-      };
+      this.lock = () => domElement.requestPointerLock();
+      this.unlock = () => document.exitPointerLock();
 
       this.getDirection = () => {
         const direction = new THREE.Vector3(0, 0, -1);
@@ -130,18 +109,18 @@
   // === Lights ===
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
-
   const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
   directionalLight.position.set(5, 10, 5);
   scene.add(directionalLight);
 
-  // === Grid + Axes (Debug)
-  scene.add(new THREE.GridHelper(10, 10));
-  scene.add(new THREE.AxesHelper(2));
+  // === Grid + Axes (debug)
+  const gridHelper = new THREE.GridHelper(10, 10);
+  scene.add(gridHelper);
+  const axesHelper = new THREE.AxesHelper(2);
+  scene.add(axesHelper);
 
   // === Create Cubes
   const geometry = new THREE.BoxGeometry(1, 1, 1);
-
   data.cubes.forEach(([x, y, z, hex]) => {
     const material = new THREE.MeshStandardMaterial({ color: hex });
     const cube = new THREE.Mesh(geometry, material);
@@ -155,10 +134,16 @@
 
   const instructions = document.getElementById('instructions');
   instructions.addEventListener('click', () => controls.lock());
-  controls.addEventListener('lock', () => instructions.style.display = 'none');
-  controls.addEventListener('unlock', () => instructions.style.display = '');
+  // controls.addEventListener('lock', () => instructions.style.display = 'none');
+  // controls.addEventListener('unlock', () => instructions.style.display = '');
 
-  // 🕹️ Add upward movement support
+  document.addEventListener('pointerlockchange', () => {
+  const isLocked = document.pointerLockElement === document.body;
+  instructions.style.display = isLocked ? 'none' : '';
+});
+
+
+  // === Movement
   const move = { forward: false, backward: false, left: false, right: false, up: false };
   const velocity = new THREE.Vector3();
   const direction = new THREE.Vector3();
@@ -180,8 +165,17 @@
     if (e.code === 'Space') move.up = false;
   });
 
-  const clock = new THREE.Clock();
+  // === GUI controls for grid and axes
+  const gui = new GUI();
+  const options = {
+    grid: true,
+    axes: true
+  };
+  gui.add(options, 'grid').name('Show Grid').onChange(v => gridHelper.visible = v);
+  gui.add(options, 'axes').name('Show Axes').onChange(v => axesHelper.visible = v);
 
+  // === Animate
+  const clock = new THREE.Clock();
   function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta();
@@ -204,7 +198,13 @@
   }
 
   animate();
+
+  // === Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
 </script>
 </body>
 </html>
-
