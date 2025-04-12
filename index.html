@@ -32,13 +32,11 @@
   <div id="instructions"><!--SELECTION MODE--></div>
 
   <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
-    import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.18/+esm';
+    import * as THREE from './libs/three.module.js';
+    import GUI from './libs/lil-gui.module.js';
 
     const i18n = {
       en: {
-        showGrid: 'Show Grid',
-        showAxes: 'Show Axes',
         cubeColor: 'Cube Color',
         showCursor: 'Show Cursor',
         background: 'Background',
@@ -46,11 +44,10 @@
         saveScene: '💾 Save Scene',
         loadScene: '📂 Load Scene',
         instructions: 'Click to start editing',
-        Language: 'Language'
+        Language: 'Language',
+        circuitMode: 'Circuit Mode'
       },
       ru: {
-        showGrid: 'Показать сетку',
-        showAxes: 'Показать оси',
         cubeColor: 'Цвет куба',
         showCursor: 'Показать курсор',
         background: 'Фон',
@@ -58,11 +55,11 @@
         saveScene: '💾 Сохранить сцену',
         loadScene: '📂 Загрузить сцену',
         instructions: 'Нажмите, чтобы начать редактирование',
-        Language: 'Язык'
+        Language: 'Язык',
+        circuitMode: 'Схемотехника'
       }
     };
 
-    // === PointerLockControls (inline) ===
     class PointerLockControls extends THREE.EventDispatcher {
       constructor(camera, domElement) {
         super();
@@ -124,12 +121,10 @@
       }
     }
 
-    // === Cube Data ===
     const data = {
       cubes: []
     };
 
-    // === Scene Setup ===
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 1.5, 5);
@@ -138,14 +133,6 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // === Lights ===
-    // const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    // scene.add(ambientLight);
-    // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    // directionalLight.position.set(5, 10, 5);
-    // scene.add(directionalLight);
-
-    // === Create Cubes
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     data.cubes.forEach(([x, y, z, hex]) => {
       const material = new THREE.MeshBasicMaterial({ color: hex });
@@ -154,7 +141,6 @@
       scene.add(cube);
     });
 
-    // === Controls
     const controls = new PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
 
@@ -167,7 +153,6 @@
     });
 
     document.body.addEventListener('click', (event) => {
-      // Only place cube when pointer lock is active
       if (document.pointerLockElement === document.body) {
         placeCubeInFront();
       }
@@ -184,14 +169,11 @@
       cursorMaterial
     );
 
-    cursorCube.renderOrder = 999; // ensure it's drawn on top
     scene.add(cursorCube);
 
-    // === Movement
     const move = { forward: false, backward: false, left: false, right: false, up: false };
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
-    //const speed = 5;
 
     document.addEventListener('keydown', e => {
       if (e.code === 'KeyW') move.forward = true;
@@ -218,18 +200,15 @@
       const position = new THREE.Vector3();
       position.copy(camera.position).add(dir.multiplyScalar(distance));
 
-      // Snap to grid
       position.x = Math.round(position.x);
       position.y = Math.round(position.y);
       position.z = Math.round(position.z);
 
-      // Search for existing cube
       const existingIndex = data.cubes.findIndex(([x, y, z]) =>
         x === position.x && y === position.y && z === position.z
       );
 
       if (existingIndex !== -1) {
-        // ✅ Remove cube from scene
         const toRemove = scene.children.find(obj =>
           obj.isMesh &&
           obj.geometry.type === 'BoxGeometry' &&
@@ -239,13 +218,10 @@
           obj != cursorCube
         );
         if (toRemove) scene.remove(toRemove);
-
-        // ✅ Remove from data.cubes
         data.cubes.splice(existingIndex, 1);
         return;
       }
 
-      // ➕ Otherwise, place new cube
       const hexColor = new THREE.Color(options.cubeColor).getHex();
       const material = new THREE.MeshBasicMaterial({ color: hexColor });
       const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
@@ -255,8 +231,6 @@
       data.cubes.push([position.x, position.y, position.z, hexColor]);
     }
 
-
-    // === GUI controls for grid and axes
     const gui = new GUI();
     const options = {
       grid: false,
@@ -265,7 +239,8 @@
       cursorVisible: true,
       speed: 10,
       backgroundColor: '#000000',
-      language: 'en' // Default language
+      language: 'en',
+      circuitMode: false
     };
 
     const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
@@ -273,8 +248,7 @@
       .onChange(() => {
         translateGUI();
       });
-    const gridController = gui.add(options, 'grid').name(i18n[options.language].showGrid).onChange(v => gridHelper.visible = v);
-    const axesController = gui.add(options, 'axes').name(i18n[options.language].showAxes).onChange(v => axesHelper.visible = v);
+    const circuitModeController = gui.add( options, 'circuitMode').name(i18n[options.language].circuitMode);
     const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor);
     const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor);
     const bgController = gui.addColor(options, 'backgroundColor')
@@ -284,7 +258,6 @@
     const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene);
     const loadController = gui.add({ load: loadSceneFromFile }, 'load').name(i18n[options.language].loadScene);
 
-    // === Grid + Axes (debug)
     const gridHelper = new THREE.GridHelper(10, 10);
     gridHelper.visible = options.grid;
     scene.add(gridHelper);
@@ -293,7 +266,6 @@
     axesHelper.visible = options.axes;
     scene.add(axesHelper);
 
-    // === Animate
     const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
@@ -342,18 +314,14 @@
           try {
             const loaded = JSON.parse(e.target.result);
 
-            // If old format: just an array
             const cubes = Array.isArray(loaded) ? loaded : loaded.cubes;
             const cameraData = loaded.camera;
             const background = loaded.backgroundColor;
 
-
-            // Remove current cubes
             scene.children
               .filter(obj => obj.isMesh && obj.geometry.type === 'BoxGeometry' && obj !== cursorCube)
               .forEach(cube => scene.remove(cube));
 
-            // Update data and re-add
             data.cubes = cubes;
             const geometry = new THREE.BoxGeometry(1, 1, 1);
 
@@ -364,7 +332,6 @@
               scene.add(cube);
             });
 
-            // Restore camera
             if (cameraData) {
               const [px, py, pz] = cameraData.position || [0, 0, 5];
               const [rx, ry, rz] = cameraData.rotation || [0, 0, 0];
@@ -375,9 +342,8 @@
             if (background) {
               options.backgroundColor = background;
               renderer.setClearColor(background);
-              bgController.updateDisplay(); // ✅ correct usage
+              bgController.updateDisplay();
             }
-
 
             console.log('Scene loaded:', data.cubes.length, 'cubes');
 
@@ -393,8 +359,6 @@
     }
 
     function translateGUI() {
-      gridController.name(i18n[options.language].showGrid);
-      axesController.name(i18n[options.language].showAxes);
       colorController.name(i18n[options.language].cubeColor);
       cursorController.name(i18n[options.language].showCursor);
       bgController.name(i18n[options.language].background);
@@ -402,8 +366,7 @@
       saveController.name(i18n[options.language].saveScene);
       loadController.name(i18n[options.language].loadScene);
       langController.name(i18n[options.language].Language);
-
-      //instructions.textContent = i18n[options.language].instructions;
+      circuitModeController.name(i18n[options.language].circuitMode);
     }
 
 
@@ -417,7 +380,7 @@
         header: "Cube Art Project 2 Scene File - 2.0.0",
         camera: cameraData,
         cubes: data.cubes,
-        backgroundColor: options.backgroundColor // ✅ include background color
+        backgroundColor: options.backgroundColor
       };
 
       const json = JSON.stringify(sceneData, null, 2);
@@ -432,12 +395,8 @@
       URL.revokeObjectURL(url);
     }
 
-
-
-
     animate();
 
-    // === Resize
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
