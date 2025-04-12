@@ -35,6 +35,12 @@
     import * as THREE from './libs/three.module.js';
     import GUI from './libs/lil-gui.module.js';
 
+    const NandHexColor = 0x8000C0;
+    const SignalHexColor = 0xFFD700;
+
+    let signalCubes = new Set();
+    let nandCubes = [];
+
     const i18n = {
       en: {
         cubeColor: 'Cube Color',
@@ -219,6 +225,7 @@
         );
         if (toRemove) scene.remove(toRemove);
         data.cubes.splice(existingIndex, 1);
+        signalCubes.delete(JSON.stringify([position.x, position.y, position.z]));
         return;
       }
 
@@ -229,6 +236,16 @@
       scene.add(cube);
 
       data.cubes.push([position.x, position.y, position.z, hexColor]);
+
+      if (hexColor == NandHexColor) {
+        nandCubes.push([position.x, position.y, position.z]);
+      }
+      else if (hexColor == SignalHexColor) {
+        signalCubes.add(JSON.stringify([position.x, position.y, position.z]));
+      }
+      else {
+        console.log(`hehe ${SignalHexColor} != ${hexColor}`)
+      }
     }
 
     const gui = new GUI();
@@ -248,6 +265,7 @@
       .onChange(() => {
         translateGUI();
       });
+
     const circuitModeController = gui.add( options, 'circuitMode').name(i18n[options.language].circuitMode);
     const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor);
     const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor);
@@ -267,8 +285,13 @@
     scene.add(axesHelper);
 
     const clock = new THREE.Clock();
-    function animate() {
-      requestAnimationFrame(animate);
+    function step() {
+      requestAnimationFrame(step);
+
+      if (options.circuitMode) {
+        circuitModeStep();
+      }
+
       const delta = clock.getDelta();
 
       direction.z = Number(move.forward) - Number(move.backward);
@@ -300,6 +323,69 @@
       renderer.render(scene, camera);
     }
 
+    function removeSignalCubeAt(x, y, z) {
+      const existingIndex = data.cubes.findIndex(([cX, cY, cZ]) =>
+        cX === x && cY === y && cZ === z
+      );
+
+      if (existingIndex !== -1) {
+        const toRemove = scene.children.find(obj =>
+          obj.isMesh &&
+          obj.geometry.type === 'BoxGeometry' &&
+          obj.position.x === x &&
+          obj.position.y === y &&
+          obj.position.z === z &&
+          obj != cursorCube
+        );
+        if (toRemove) scene.remove(toRemove);
+        data.cubes.splice(existingIndex, 1);
+      }
+
+      signalCubes.delete(JSON.stringify([x, y, z]));
+    }
+
+    function addSignalCubeAt(x, y, z) {
+      if (signalCubes.has(JSON.stringify([x, y, z]))) {
+        console.log("no")
+        return;
+      }
+      const existingIndex = data.cubes.findIndex(([cX, cY, cZ]) =>
+        cX === x && cY === y && cZ === z
+      );
+
+      if (existingIndex !== -1) {
+        return;
+      }
+
+      const hexColor = new THREE.Color(SignalHexColor).getHex();
+      const material = new THREE.MeshBasicMaterial({ color: hexColor });
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+
+      cube.position.x = x;
+      cube.position.y = y;
+      cube.position.z = z;
+
+      scene.add(cube);
+
+      data.cubes.push([x, y, z, hexColor]);
+      signalCubes.add(JSON.stringify([x, y, z]));
+    }
+
+    function circuitModeStep() {
+      nandCubes.forEach(([x, y, z]) => {
+        const leftSignal = signalCubes.has(JSON.stringify([x - 1, y, z]));
+        const rightSignal = signalCubes.has(JSON.stringify([x + 1, y, z]));
+        const outputSignal = !(leftSignal && rightSignal);
+
+        if (outputSignal == true) {
+          addSignalCubeAt(x, y, z - 1, SignalHexColor);
+        }
+        else {
+          removeSignalCubeAt(x, y, z - 1);
+        }
+      })
+    }
+
     function loadSceneFromFile() {
       const input = document.createElement('input');
       input.type = 'file';
@@ -322,6 +408,9 @@
               .filter(obj => obj.isMesh && obj.geometry.type === 'BoxGeometry' && obj !== cursorCube)
               .forEach(cube => scene.remove(cube));
 
+            nandCubes = [];
+            signalCubes = {};
+
             data.cubes = cubes;
             const geometry = new THREE.BoxGeometry(1, 1, 1);
 
@@ -330,6 +419,13 @@
               const cube = new THREE.Mesh(geometry, material);
               cube.position.set(x, y, z);
               scene.add(cube);
+
+              if (hex == NandHexColor) {
+                nandCubes.push([x, y, z]);
+              }
+              else if (hex == SignalHexColor) {
+                signalCubes.add([x,y,z]);
+              }
             });
 
             if (cameraData) {
@@ -395,7 +491,7 @@
       URL.revokeObjectURL(url);
     }
 
-    animate();
+    step();
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
