@@ -38,9 +38,6 @@
     const NandHexColor = 0x8000C0;
     const SignalHexColor = 0xFFD700;
 
-    let signalCubes = new Set();
-    let nandCubes = [];
-
     const i18n = {
       en: {
         cubeColor: 'Cube Color',
@@ -65,6 +62,10 @@
         circuitMode: 'Схемотехника'
       }
     };
+
+    function js(object) {
+      return JSON.stringify(object);
+    }
 
     class PointerLockControls extends THREE.EventDispatcher {
       constructor(camera, domElement) {
@@ -127,9 +128,9 @@
       }
     }
 
-    const data = {
-      cubes: []
-    };
+    let cubes = new Map();
+    let signalCubes = new Set();
+    let nandCubes = new Map();
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -140,12 +141,12 @@
     document.body.appendChild(renderer.domElement);
 
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    data.cubes.forEach(([x, y, z, hex]) => {
-      const material = new THREE.MeshBasicMaterial({ color: hex });
-      const cube = new THREE.Mesh(geometry, material);
-      cube.position.set(x, y, z);
-      scene.add(cube);
-    });
+    // data.cubes.forEach(([x, y, z, hex]) => {
+    //   const material = new THREE.MeshBasicMaterial({ color: hex });
+    //   const cube = new THREE.Mesh(geometry, material);
+    //   cube.position.set(x, y, z);
+    //   scene.add(cube);
+    // });
 
     const controls = new PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
@@ -160,7 +161,7 @@
 
     document.body.addEventListener('click', (event) => {
       if (document.pointerLockElement === document.body) {
-        placeCubeInFront();
+        toggleCubeInFront();
       }
     });
 
@@ -195,10 +196,61 @@
       if (e.code === 'KeyA') move.left = false;
       if (e.code === 'KeyD') move.right = false;
       if (e.code === 'Space') move.up = false;
-      if (e.code === 'KeyF') placeCubeInFront();
+      if (e.code === 'KeyF') toggleCubeInFront();
     });
 
-    function placeCubeInFront() {
+    function clearScene() {
+      cubes.forEach((value, key) => {
+        removeCubeAt(value.position.x, value.position.y, value.position.z);
+      });
+      cubes.clear();
+      signalCubes.clear();
+      nandCubes.clear();
+    }
+
+    function isThereCubeAt(x, y, z) {
+      return cubes.has(js([x, y, z]));
+    }
+
+    function addCubeAt(x, y, z, hex) {
+      const hexColor = new THREE.Color(hex).getHex();
+      const material = new THREE.MeshBasicMaterial({ color: hexColor });
+      const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+
+      cube.position.x = x;
+      cube.position.y = y;
+      cube.position.z = z;
+
+      scene.add(cube);
+
+      cubes.set(js([x, y, z]), cube);
+
+      if (hexColor == NandHexColor) {
+        nandCubes.set(js([x, y, z]), [x, y, z]);
+      }
+      else if (hexColor == SignalHexColor) {
+        signalCubes.add(js([x, y, z]));
+      }
+    }
+
+    function removeCubeAt(x, y, z) {
+        const cube = cubes.get(js([x, y, z]));
+        scene.remove(cube);
+        cubes.delete(js([x, y, z]));
+        nandCubes.delete(js([x, y, z]));
+        signalCubes.delete(js([x, y, z]));
+    }
+
+    function toggleCubeAt(x, y, z, hex) {
+      if (isThereCubeAt(x, y, z)) {
+        removeCubeAt(x, y, z);
+      }
+      else {
+        addCubeAt(x, y, z, hex);
+      }
+    }
+
+    function toggleCubeInFront() {
       const distance = 3;
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
@@ -210,42 +262,9 @@
       position.y = Math.round(position.y);
       position.z = Math.round(position.z);
 
-      const existingIndex = data.cubes.findIndex(([x, y, z]) =>
-        x === position.x && y === position.y && z === position.z
-      );
-
-      if (existingIndex !== -1) {
-        const toRemove = scene.children.find(obj =>
-          obj.isMesh &&
-          obj.geometry.type === 'BoxGeometry' &&
-          obj.position.x === position.x &&
-          obj.position.y === position.y &&
-          obj.position.z === position.z &&
-          obj != cursorCube
-        );
-        if (toRemove) scene.remove(toRemove);
-        data.cubes.splice(existingIndex, 1);
-        signalCubes.delete(JSON.stringify([position.x, position.y, position.z]));
-        return;
-      }
-
       const hexColor = new THREE.Color(options.cubeColor).getHex();
-      const material = new THREE.MeshBasicMaterial({ color: hexColor });
-      const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
-      cube.position.copy(position);
-      scene.add(cube);
 
-      data.cubes.push([position.x, position.y, position.z, hexColor]);
-
-      if (hexColor == NandHexColor) {
-        nandCubes.push([position.x, position.y, position.z]);
-      }
-      else if (hexColor == SignalHexColor) {
-        signalCubes.add(JSON.stringify([position.x, position.y, position.z]));
-      }
-      else {
-        console.log(`hehe ${SignalHexColor} != ${hexColor}`)
-      }
+      toggleCubeAt(position.x, position.y, position.z, hexColor)
     }
 
     const gui = new GUI();
@@ -275,14 +294,6 @@
     const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed);
     const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene);
     const loadController = gui.add({ load: loadSceneFromFile }, 'load').name(i18n[options.language].loadScene);
-
-    const gridHelper = new THREE.GridHelper(10, 10);
-    gridHelper.visible = options.grid;
-    scene.add(gridHelper);
-
-    const axesHelper = new THREE.AxesHelper(2);
-    axesHelper.visible = options.axes;
-    scene.add(axesHelper);
 
     const clock = new THREE.Clock();
     function step() {
@@ -323,65 +334,26 @@
       renderer.render(scene, camera);
     }
 
-    function removeSignalCubeAt(x, y, z) {
-      const existingIndex = data.cubes.findIndex(([cX, cY, cZ]) =>
-        cX === x && cY === y && cZ === z
-      );
-
-      if (existingIndex !== -1) {
-        const toRemove = scene.children.find(obj =>
-          obj.isMesh &&
-          obj.geometry.type === 'BoxGeometry' &&
-          obj.position.x === x &&
-          obj.position.y === y &&
-          obj.position.z === z &&
-          obj != cursorCube
-        );
-        if (toRemove) scene.remove(toRemove);
-        data.cubes.splice(existingIndex, 1);
-      }
-
-      signalCubes.delete(JSON.stringify([x, y, z]));
-    }
-
-    function addSignalCubeAt(x, y, z) {
-      if (signalCubes.has(JSON.stringify([x, y, z]))) {
-        console.log("no")
-        return;
-      }
-      const existingIndex = data.cubes.findIndex(([cX, cY, cZ]) =>
-        cX === x && cY === y && cZ === z
-      );
-
-      if (existingIndex !== -1) {
-        return;
-      }
-
-      const hexColor = new THREE.Color(SignalHexColor).getHex();
-      const material = new THREE.MeshBasicMaterial({ color: hexColor });
-      const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
-
-      cube.position.x = x;
-      cube.position.y = y;
-      cube.position.z = z;
-
-      scene.add(cube);
-
-      data.cubes.push([x, y, z, hexColor]);
-      signalCubes.add(JSON.stringify([x, y, z]));
-    }
-
     function circuitModeStep() {
-      nandCubes.forEach(([x, y, z]) => {
-        const leftSignal = signalCubes.has(JSON.stringify([x - 1, y, z]));
-        const rightSignal = signalCubes.has(JSON.stringify([x + 1, y, z]));
+      const nandCubesCopy = new Map(nandCubes);
+      nandCubesCopy.forEach((value, key) => {
+        const x = value[0];
+        const y = value[1];
+        const z = value[2];
+
+        const leftSignal = signalCubes.has(js([x - 1, y, z]));
+        const rightSignal = signalCubes.has(js([x + 1, y, z]));
         const outputSignal = !(leftSignal && rightSignal);
 
-        if (outputSignal == true) {
-          addSignalCubeAt(x, y, z - 1, SignalHexColor);
+        if (
+          outputSignal == true
+        ) {
+          if (isThereCubeAt(x, y, z - 1) == false) {
+            addCubeAt(x, y, z - 1, SignalHexColor);
+          }
         }
         else {
-          removeSignalCubeAt(x, y, z - 1);
+          removeCubeAt(x, y, z - 1);
         }
       })
     }
@@ -404,32 +376,14 @@
             const cameraData = loaded.camera;
             const background = loaded.backgroundColor;
 
-            scene.children
-              .filter(obj => obj.isMesh && obj.geometry.type === 'BoxGeometry' && obj !== cursorCube)
-              .forEach(cube => scene.remove(cube));
+            clearScene();
 
-            nandCubes = [];
-            signalCubes = {};
-
-            data.cubes = cubes;
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-            data.cubes.forEach(([x, y, z, hex]) => {
-              const material = new THREE.MeshBasicMaterial({ color: hex });
-              const cube = new THREE.Mesh(geometry, material);
-              cube.position.set(x, y, z);
-              scene.add(cube);
-
-              if (hex == NandHexColor) {
-                nandCubes.push([x, y, z]);
-              }
-              else if (hex == SignalHexColor) {
-                signalCubes.add([x,y,z]);
-              }
-            });
+            cubes.forEach((cube) => {
+              addCubeAt(cube[0], cube[1], cube[2], cube[3]);
+            })
 
             if (cameraData) {
-              const [px, py, pz] = cameraData.position || [0, 0, 5];
+              const [px, py, pz] = cameraData.position || [0, 0, 0];
               const [rx, ry, rz] = cameraData.rotation || [0, 0, 0];
               camera.position.set(px, py, pz);
               camera.rotation.set(rx, ry, rz);
@@ -440,8 +394,6 @@
               renderer.setClearColor(background);
               bgController.updateDisplay();
             }
-
-            console.log('Scene loaded:', data.cubes.length, 'cubes');
 
           } catch (err) {
             alert('Failed to load scene file: ' + err.message);
@@ -472,14 +424,21 @@
         rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z]
       };
 
+      const serializedCubes = new Array();
+
+      cubes.forEach((value, key) => {
+        const hex = value.material.color.getHexString();
+        serializedCubes.push([value.position.x, value.position.y, value.position.z, `#${hex}`]);
+      });
+
       const sceneData = {
         header: "Cube Art Project 2 Scene File - 2.0.0",
         camera: cameraData,
-        cubes: data.cubes,
+        cubes: serializedCubes,
         backgroundColor: options.backgroundColor
       };
 
-      const json = JSON.stringify(sceneData, null, 2);
+      const json = js(sceneData, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
 
