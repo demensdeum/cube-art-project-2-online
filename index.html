@@ -25,11 +25,24 @@
       background: rgba(0, 0, 0, 0);
       padding-top: 20vh;
     }
+
+    #status {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: #00ff00;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 5px 10px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: bold;
+    }
   </style>
 </head>
 
 <body>
   <div id="instructions"><!--SELECTION MODE--></div>
+  <div id="status">Connecting...</div>
 
   <script type="module">
     import * as THREE from './libs/three.module.js';
@@ -62,6 +75,197 @@
         circuitMode: 'Схемотехника'
       }
     };
+
+    const CUBES_WS_URL = `ws://localhost:8080`
+    const PLAYERS_WS_URL = `ws://localhost:8081`
+
+    let wsCubes = null
+    let wsPlayers = null
+    let myUUID = null
+    let lastSentPosition = new THREE.Vector3()
+    const REMOTE_PLAYER_MESH_COLOR = 0x00ffff
+    const remotePlayers = new Map()
+    const remotePlayerGeometry = new THREE.SphereGeometry(0.4, 16, 16)
+    const remotePlayerMaterial = new THREE.MeshBasicMaterial({ color: REMOTE_PLAYER_MESH_COLOR })
+    const PLAYER_MOVE_SEND_INTERVAL_MS = 50
+
+    const updateStatus = () => {
+        const statusDiv = document.getElementById('status')
+        const cubesState = wsCubes?.readyState === wsCubes?.OPEN ? 'Cubes: Open' : 'Cubes: Closed'
+        const playersState = wsPlayers?.readyState === wsPlayers?.OPEN ? 'Players: Open' : 'Players: Closed'
+
+        let color = '#ff0000'
+        if (wsCubes?.readyState === wsCubes?.OPEN || wsPlayers?.readyState === wsPlayers?.OPEN) {
+            color = '#ffff00'
+        }
+        if (wsCubes?.readyState === wsCubes?.OPEN && wsPlayers?.readyState === wsPlayers?.OPEN) {
+            color = '#00ff00'
+        }
+
+        statusDiv.textContent = `${playersState} | ${cubesState} (UUID: ${myUUID || 'N/A'})`
+        statusDiv.style.color = color
+    }
+
+    const onWsPlayersMessage = (event) => {
+        try {
+            const data = JSON.parse(event.data)
+
+            switch (data.type) {
+                case 'playerCreated':
+                    myUUID = data.player.uuid
+                    camera.position.set(data.player.x, data.player.y, data.player.z)
+                    updateStatus()
+                    console.log('My UUID is:', myUUID)
+                    break
+
+                case 'playersUpdate':
+                    updateRemotePlayers(data.players)
+                    break
+
+                default:
+                    console.log('Received unknown players message type:', data)
+                    break
+            }
+        } catch (e) {
+            console.error('Failed to parse incoming players message:', e)
+        }
+    }
+
+    const onWsCubesMessage = (event) => {
+        try {
+            const data = JSON.parse(event.data)
+            switch (data.type) {
+                case 'stateUpdate':
+                    console.log('Received full state update. Synchronizing scene.')
+                    const serverCubes = data.cubes;
+
+                    const clientCubeKeys = new Set(cubes.keys());
+                    const serverCubeKeys = new Set(Object.keys(serverCubes));
+
+                    console.log(clientCubeKeys);
+                    console.log(serverCubes);
+
+                    for (const key of clientCubeKeys) {
+                        if (!serverCubeKeys.has(key)) {
+                            const [x, y, z] = JSON.parse(key);
+                            console.log(`removed cube ${x} ${y} ${z}`)
+                            removeCubeAt(x, y, z, false);
+                        }
+                    }
+
+                    for (const key in serverCubes) {
+                        if (!clientCubeKeys.has(key)) {
+                            const cubeData = serverCubes[key];
+                            const hexColor = intToHex(cubeData.color)
+                            addCubeAt(cubeData.x, cubeData.y, cubeData.z, hexColor, false);
+                        }
+                    }
+
+                    console.log(`Scene synchronized. Cubes on server: ${serverCubeKeys.size}. Cubes now on client: ${cubes.size}.`)
+                    break
+
+                default:
+                    console.log('Received unknown cubes message type:', data)
+                    break
+            }
+
+        } catch (e) {
+            console.error('Failed to parse incoming cubes message:', e)
+        }
+    }
+
+    const sendAddCube = (x, y, z, hexColor) => {
+        console.log(hexColor)
+        if (wsCubes?.readyState === wsCubes?.OPEN) {
+            wsCubes.send(js({
+                method: 'addCube',
+                x: x,
+                y: y,
+                z: z,
+                rgbColor: hexColor
+            }))
+        } else {
+            console.warn('Cubes server not connected. Cube creation not synchronized.')
+        }
+    }
+
+    const sendRemoveCube = (x, y, z) => {
+        if (wsCubes?.readyState === wsCubes?.OPEN) {
+            wsCubes.send(js({
+                method: 'removeCube',
+                x: x,
+                y: y,
+                z: z
+            }))
+        } else {
+            console.warn('Cubes server not connected. Cube removal not synchronized.')
+        }
+    }
+
+    const updateRemotePlayers = (serverPlayers) => {
+        const receivedUUIDs = new Set()
+
+        for (const uuid in serverPlayers) {
+            const player = serverPlayers[uuid]
+            receivedUUIDs.add(uuid)
+
+            if (uuid === myUUID) continue
+
+            if (!remotePlayers.has(uuid)) {
+                const mesh = new THREE.Mesh(remotePlayerGeometry, remotePlayerMaterial)
+                scene.add(mesh)
+                remotePlayers.set(uuid, { mesh })
+            }
+
+            const remotePlayer = remotePlayers.get(uuid)
+            if (remotePlayer) {
+                remotePlayer.mesh.position.set(player.x, player.y, player.z)
+            }
+        }
+
+        const playersToRemove = []
+        for (const [uuid, remotePlayer] of remotePlayers.entries()) {
+            if (!receivedUUIDs.has(uuid)) {
+                playersToRemove.push(uuid)
+                scene.remove(remotePlayer.mesh)
+            }
+        }
+
+        playersToRemove.forEach(uuid => {
+            remotePlayers.delete(uuid)
+            console.log(`Removed remote player: ${uuid}`)
+        })
+    }
+
+    const connectWebSocket = () => {
+        wsPlayers = new WebSocket(PLAYERS_WS_URL)
+        wsPlayers.onopen = () => {
+            updateStatus()
+            wsPlayers.send(JSON.stringify({ method: 'addPlayer' }))
+        }
+        wsPlayers.onmessage = onWsPlayersMessage
+        wsPlayers.onerror = updateStatus
+        wsPlayers.onclose = () => {
+            myUUID = null
+            updateStatus()
+        }
+
+        wsCubes = new WebSocket(CUBES_WS_URL)
+        wsCubes.onopen = updateStatus
+        wsCubes.onmessage = onWsCubesMessage
+        wsCubes.onerror = updateStatus
+        wsCubes.onclose = updateStatus
+
+        updateStatus()
+    }
+
+    function intToHex(intColorString) {
+      const intColor = parseInt(intColorString, 10)
+      if (isNaN(intColor) || intColor < 0 || intColor > 0xFFFFFF) {
+          return '#ffffff'
+      }
+      return '#' + intColor.toString(16).padStart(6, '0')
+    }
 
     function js(object) {
       return JSON.stringify(object);
@@ -212,7 +416,8 @@
       return cubes.has(js([x, y, z]));
     }
 
-    function addCubeAt(x, y, z, hex) {
+    function addCubeAt(x, y, z, hex, broadcast = true) {
+      console.log(hex)
       const hexColor = new THREE.Color(hex).getHex();
       const material = new THREE.MeshBasicMaterial({ color: hexColor });
       const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
@@ -231,14 +436,21 @@
       else if (hexColor == SignalHexColor) {
         signalCubes.add(js([x, y, z]));
       }
+
+      if (broadcast) {
+        sendAddCube(x, y, z, hex)
+      }
     }
 
-    function removeCubeAt(x, y, z) {
+    function removeCubeAt(x, y, z, broadcast = true) {
         const cube = cubes.get(js([x, y, z]));
         scene.remove(cube);
         cubes.delete(js([x, y, z]));
         nandCubes.delete(js([x, y, z]));
         signalCubes.delete(js([x, y, z]));
+        if (broadcast) {
+          sendRemoveCube(x, y, z)
+        }
     }
 
     function toggleCubeAt(x, y, z, hex) {
@@ -450,6 +662,7 @@
       URL.revokeObjectURL(url);
     }
 
+    connectWebSocket()
     step();
 
     window.addEventListener('resize', () => {
