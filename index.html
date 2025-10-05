@@ -381,7 +381,7 @@
 
     scene.add(cursorCube);
 
-    const move = { forward: false, backward: false, left: false, right: false, up: false };
+    const move = { forward: false, backward: false, left: false, right: false, up: false, down: false };
     const velocity = new THREE.Vector3();
     const direction = new THREE.Vector3();
 
@@ -391,6 +391,7 @@
       if (e.code === 'KeyA') move.left = true;
       if (e.code === 'KeyD') move.right = true;
       if (e.code === 'Space') move.up = true;
+      if (e.code === 'ControlLeft') move.down = true;
     });
 
     document.addEventListener('keyup', e => {
@@ -400,6 +401,7 @@
       if (e.code === 'KeyD') move.right = false;
       if (e.code === 'Space') move.up = false;
       if (e.code === 'KeyF') toggleCubeInFront();
+      if (e.code === 'ControlLeft') move.down = false;
     });
 
     function clearScene() {
@@ -517,6 +519,9 @@
         velocity.x = direction.x * options.speed * delta;
         velocity.z = direction.z * options.speed * delta;
         velocity.y = move.up ? options.speed * delta : 0;
+        if (!move.up) {
+          velocity.y = move.down ? -options.speed * delta : 0;
+        }
 
         controls.moveRight(velocity.x);
         controls.moveForward(velocity.z);
