@@ -19,6 +19,6 @@ Connect with friends to place and color individual cubes in real-time, experimen
 
 ## 🕹 Try It Live
 
-👉 **[Launch Demo](https://demensdeum.com/software/cube-art-project-2/)**
+👉 **[Play Live](https://demensdeum.com/software/cube-art-project-2-online/)**
 
 Runs entirely in your browser. No install needed.
