@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title>Cube Art Project 2</title>
+  <title>Cube Art Project 2 Online</title>
   <style>
     body {
       margin: 0;
@@ -58,10 +58,8 @@
         background: 'Background',
         moveSpeed: 'Move Speed',
         saveScene: '💾 Save Scene',
-        loadScene: '📂 Load Scene',
         instructions: 'Click to start editing',
         Language: 'Language',
-        circuitMode: 'Circuit Mode'
       },
       ru: {
         cubeColor: 'Цвет куба',
@@ -69,10 +67,8 @@
         background: 'Фон',
         moveSpeed: 'Скорость перемещения',
         saveScene: '💾 Сохранить сцену',
-        loadScene: '📂 Загрузить сцену',
         instructions: 'Нажмите, чтобы начать редактирование',
         Language: 'Язык',
-        circuitMode: 'Схемотехника'
       }
     };
 
@@ -88,6 +84,7 @@
     const remotePlayerGeometry = new THREE.SphereGeometry(0.4, 16, 16)
     const remotePlayerMaterial = new THREE.MeshBasicMaterial({ color: REMOTE_PLAYER_MESH_COLOR })
     const PLAYER_MOVE_SEND_INTERVAL_MS = 50
+    let lastMoveSendTime = 0
 
     const updateStatus = () => {
         const statusDiv = document.getElementById('status')
@@ -488,7 +485,6 @@
       speed: 10,
       backgroundColor: '#000000',
       language: 'en',
-      circuitMode: false
     };
 
     const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
@@ -497,7 +493,6 @@
         translateGUI();
       });
 
-    const circuitModeController = gui.add( options, 'circuitMode').name(i18n[options.language].circuitMode);
     const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor);
     const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor);
     const bgController = gui.addColor(options, 'backgroundColor')
@@ -505,15 +500,10 @@
       .onChange(color => renderer.setClearColor(color));
     const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed);
     const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene);
-    const loadController = gui.add({ load: loadSceneFromFile }, 'load').name(i18n[options.language].loadScene);
 
     const clock = new THREE.Clock();
     function step() {
       requestAnimationFrame(step);
-
-      if (options.circuitMode) {
-        circuitModeStep();
-      }
 
       const delta = clock.getDelta();
 
@@ -531,6 +521,28 @@
         camera.position.y += velocity.y;
       }
 
+      const now = Date.now()
+      if (
+        wsPlayers &&
+        wsPlayers.readyState === wsPlayers.OPEN &&
+        myUUID &&
+        now - lastMoveSendTime > PLAYER_MOVE_SEND_INTERVAL_MS
+      ) {
+          const currentPos = camera.position
+
+          if (!lastSentPosition.equals(currentPos)) {
+              wsPlayers.send(JSON.stringify({
+                  method: 'playerMove',
+                  playerUUID: myUUID,
+                  x: currentPos.x,
+                  y: currentPos.y,
+                  z: currentPos.z
+              }))
+              lastSentPosition.copy(currentPos)
+              lastMoveSendTime = now
+          }
+      }
+
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
       const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3));
@@ -546,78 +558,6 @@
       renderer.render(scene, camera);
     }
 
-    function circuitModeStep() {
-      const nandCubesCopy = new Map(nandCubes);
-      nandCubesCopy.forEach((value, key) => {
-        const x = value[0];
-        const y = value[1];
-        const z = value[2];
-
-        const leftSignal = signalCubes.has(js([x - 1, y, z]));
-        const rightSignal = signalCubes.has(js([x + 1, y, z]));
-        const outputSignal = !(leftSignal && rightSignal);
-
-        if (
-          outputSignal == true
-        ) {
-          if (isThereCubeAt(x, y, z - 1) == false) {
-            addCubeAt(x, y, z - 1, SignalHexColor);
-          }
-        }
-        else {
-          removeCubeAt(x, y, z - 1);
-        }
-      })
-    }
-
-    function loadSceneFromFile() {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.cartp2,application/json';
-
-      input.onchange = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const loaded = JSON.parse(e.target.result);
-
-            const cubes = Array.isArray(loaded) ? loaded : loaded.cubes;
-            const cameraData = loaded.camera;
-            const background = loaded.backgroundColor;
-
-            clearScene();
-
-            cubes.forEach((cube) => {
-              addCubeAt(cube[0], cube[1], cube[2], cube[3]);
-            })
-
-            if (cameraData) {
-              const [px, py, pz] = cameraData.position || [0, 0, 0];
-              const [rx, ry, rz] = cameraData.rotation || [0, 0, 0];
-              camera.position.set(px, py, pz);
-              camera.rotation.set(rx, ry, rz);
-            }
-
-            if (background) {
-              options.backgroundColor = background;
-              renderer.setClearColor(background);
-              bgController.updateDisplay();
-            }
-
-          } catch (err) {
-            alert('Failed to load scene file: ' + err.message);
-          }
-        };
-
-        reader.readAsText(file);
-      };
-
-      input.click();
-    }
-
     function translateGUI() {
       colorController.name(i18n[options.language].cubeColor);
       cursorController.name(i18n[options.language].showCursor);
@@ -626,9 +566,7 @@
       saveController.name(i18n[options.language].saveScene);
       loadController.name(i18n[options.language].loadScene);
       langController.name(i18n[options.language].Language);
-      circuitModeController.name(i18n[options.language].circuitMode);
     }
-
 
     function saveSceneToFile() {
       const cameraData = {
