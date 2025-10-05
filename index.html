@@ -101,6 +101,8 @@
 
         statusDiv.textContent = `${playersState} | ${cubesState} (UUID: ${myUUID || 'N/A'})`
         statusDiv.style.color = color
+        statusDiv.style.opacity = 0.1
+        statusDiv.style.userSelect = 'none'
     }
 
     const onWsPlayersMessage = (event) => {
