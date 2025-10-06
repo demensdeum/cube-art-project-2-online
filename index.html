@@ -8,6 +8,7 @@
     body {
       margin: 0;
       overflow: hidden;
+      background-color: black;
     }
 
     canvas {
@@ -47,6 +48,232 @@
   <script type="module">
     import * as THREE from './libs/three.module.js';
     import GUI from './libs/lil-gui.module.js';
+
+    const JOYSTICK_HORIZONTAL_PADDING = 32
+    const JOYSTICK_VERTICAL_PADDING = 32
+    const JOYSTICK_CONTAINER_SIZE = 240
+    const JOYSTICK_Z_DEPTH = 1000
+
+    class Joystick {
+        constructor(id, delegate, size) {
+            this.id = id
+            this.delegate = delegate
+            this.size = size
+
+            this.radius = size * 0.3125
+            this.handleRadius = size * 0.14583
+
+            this.container = document.createElement('div')
+            this.container.id = `joystick${id}_container`
+            this.container.classList.add('joystick-container')
+
+            this.container.style.position = 'absolute'
+            this.container.style.width = `${this.size}px`
+            this.container.style.height = `${this.size}px`
+            this.container.style.touchAction = 'none'
+            this.container.style.pointerEvents = 'auto'
+            this.container.style.opacity = 0.9
+            this.container.style.userSelect = 'none'
+
+            this.canvas = document.createElement('canvas')
+            this.canvas.id = `joystick${id}_canvas`
+            this.container.appendChild(this.canvas)
+            this.ctx = this.canvas.getContext('2d')
+
+            this.canvas.width = this.size
+            this.canvas.height = this.size
+
+            this.canvas.style.width = '100%'
+            this.canvas.style.height = '100%'
+            this.canvas.style.background = 'rgba(0, 0, 0, 0.2)'
+            this.canvas.style.borderRadius = '50%'
+
+            this.center = { x: this.size / 2, y: this.size / 2 }
+
+            this.current = { x: 0, y: 0 }
+            this.isDragging = false
+            this.pointerId = null
+            this.normalizedX = 0
+            this.normalizedY = 0
+
+            this.canvas.addEventListener('pointerdown', this.handlePointerDown.bind(this))
+            this.canvas.addEventListener('pointermove', this.handlePointerMove.bind(this))
+            this.canvas.addEventListener('pointerup', this.handlePointerUp.bind(this))
+            this.canvas.addEventListener('pointercancel', this.handlePointerUp.bind(this))
+            this.canvas.addEventListener('pointerleave', this.handlePointerUp.bind(this))
+        }
+
+        placeJoystickAt(x, y, zDepth) {
+            if (!this.container.parentElement) {
+                document.body.appendChild(this.container)
+            }
+
+            this.container.style.zIndex = zDepth
+            this.container.style.top = `${y}px`
+            this.container.style.left = `${x}px`
+        }
+
+        updatePosition(x, y) {
+            const dx = x - this.center.x
+            const dy = y - this.center.y
+            const distance = Math.sqrt(dx * dx + dy * dy)
+
+            if (distance > this.radius) {
+                const angle = Math.atan2(dy, dx)
+                this.current.x = Math.cos(angle) * this.radius
+                this.current.y = Math.sin(angle) * this.radius
+            } else {
+                this.current.x = dx
+                this.current.y = dy
+            }
+
+            this.normalizedX = this.current.x / this.radius
+            this.normalizedY = -this.current.y / this.radius
+
+            this.delegate(this.id, this.normalizedX, this.normalizedY, this.isDragging)
+        }
+
+        draw() {
+            const ctx = this.ctx
+
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
+
+            if (!options.cursorVisible) {
+              this.canvas.style.background = 'rgba(0, 0, 0, 0.0)'
+              return
+            }
+
+            const globalAlpha = 0.9
+            ctx.globalAlpha = globalAlpha
+
+            ctx.beginPath()
+            ctx.arc(this.center.x, this.center.y, this.radius, 0, Math.PI * 2, false)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'
+            ctx.fill()
+            ctx.lineWidth = 2
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'
+            ctx.stroke()
+
+            const handleX = this.center.x + this.current.x
+            const handleY = this.center.y + this.current.y
+
+            const handleOpacity = this.isDragging ? 1.0 : 0.3
+
+            ctx.beginPath()
+            ctx.arc(handleX, handleY, this.handleRadius, 0, Math.PI * 2, false)
+            ctx.fillStyle = `rgba(243, 243, 243, ${handleOpacity})`
+
+            if (this.isDragging) {
+                ctx.shadowColor = 'rgba(230, 230, 230, 0.7)'
+                ctx.shadowBlur = 15
+            } else {
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+                ctx.shadowBlur = 5
+            }
+
+            ctx.fill()
+            ctx.shadowBlur = 0
+
+            ctx.globalAlpha = 1.0
+        }
+
+        reset() {
+            this.isDragging = false
+            this.pointerId = null
+            this.current.x = 0
+            this.current.y = 0
+            this.normalizedX = 0
+            this.normalizedY = 0
+            this.delegate(this.id, this.normalizedX, this.normalizedY, this.isDragging)
+        }
+
+        startDrag(pointerId) {
+            this.isDragging = true
+            this.pointerId = pointerId
+        }
+
+        handlePointerDown(event) {
+            event.preventDefault()
+            event.stopPropagation()
+
+            if (!this.isDragging) {
+                this.canvas.setPointerCapture(event.pointerId)
+                this.startDrag(event.pointerId)
+
+                const rect = this.canvas.getBoundingClientRect()
+                const x = event.clientX - rect.left
+                const y = event.clientY - rect.top
+
+                this.updatePosition(x, y)
+            }
+        }
+
+        handlePointerMove(event) {
+            if (this.pointerId !== event.pointerId) return
+
+            const rect = this.canvas.getBoundingClientRect()
+            const x = event.clientX - rect.left
+            const y = event.clientY - rect.top
+
+            this.updatePosition(x, y)
+        }
+
+        handlePointerUp(event) {
+            if (this.pointerId !== event.pointerId) return
+
+            this.canvas.releasePointerCapture(event.pointerId)
+            this.reset()
+        }
+    }
+
+    function positionJoysticks() {
+        const leftX = JOYSTICK_HORIZONTAL_PADDING
+        const leftY = window.innerHeight - JOYSTICK_CONTAINER_SIZE - JOYSTICK_VERTICAL_PADDING
+
+        const rightX = window.innerWidth - JOYSTICK_CONTAINER_SIZE - JOYSTICK_HORIZONTAL_PADDING
+        const rightY = window.innerHeight - JOYSTICK_CONTAINER_SIZE - JOYSTICK_VERTICAL_PADDING
+
+        leftJoystick.placeJoystickAt(leftX, leftY, JOYSTICK_Z_DEPTH)
+        rightJoystick.placeJoystickAt(rightX, rightY, JOYSTICK_Z_DEPTH)
+    }
+
+    function handleJoystickMove(id, x, y, isDragging) {
+      if (id == "rightJoystick") {
+        if (x > 0.2) {
+          move.left = false
+          move.right = true
+        }
+        else if (x < -0.2) {
+          move.left = true
+          move.right = false
+        }
+        else {
+          move.left = false
+          move.right = false
+        }
+
+
+        if (y < -0.2) {
+          move.forward = false
+          move.backward = true
+        }
+        else if (y > 0.2) {
+          move.forward = true
+          move.backward = false
+        }
+        else {
+          move.forward = false
+          move.backward = false
+        }
+      }
+    }
+
+    const leftJoystick = new Joystick("leftJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+    const rightJoystick = new Joystick("rightJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+
+    leftJoystick.placeJoystickAt(0,0, 1000)
+    rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
+    positionJoysticks()
 
     const NandHexColor = 0x8000C0;
     const SignalHexColor = 0xFFD700;
@@ -270,6 +497,18 @@
       return JSON.stringify(object);
     }
 
+    function handleCameraRotation(x, y) {
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        const PI_2 = Math.PI / 2;
+        const movementX = x || 0;
+        const movementY = y || 0;
+        euler.setFromQuaternion(camera.quaternion);
+        euler.y -= movementX * 0.002;
+        euler.x -= movementY * 0.002;
+        euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
+        camera.quaternion.setFromEuler(euler);
+    }
+
     class PointerLockControls extends THREE.EventDispatcher {
       constructor(camera, domElement) {
         super();
@@ -277,18 +516,10 @@
         this.isLocked = false;
 
         const scope = this;
-        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-        const PI_2 = Math.PI / 2;
 
         function onMouseMove(event) {
           if (!scope.isLocked) return;
-          const movementX = event.movementX || 0;
-          const movementY = event.movementY || 0;
-          euler.setFromQuaternion(camera.quaternion);
-          euler.y -= movementX * 0.002;
-          euler.x -= movementY * 0.002;
-          euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
-          camera.quaternion.setFromEuler(euler);
+          handleCameraRotation(event.movementX, event.movementY)
         }
 
         function onPointerlockChange() {
@@ -344,12 +575,6 @@
     document.body.appendChild(renderer.domElement);
 
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    // data.cubes.forEach(([x, y, z, hex]) => {
-    //   const material = new THREE.MeshBasicMaterial({ color: hex });
-    //   const cube = new THREE.Mesh(geometry, material);
-    //   cube.position.set(x, y, z);
-    //   scene.add(cube);
-    // });
 
     const controls = new PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
@@ -515,7 +740,13 @@
       direction.x = Number(move.right) - Number(move.left);
       direction.normalize();
 
-      if (controls.isLocked) {
+      handleCameraRotation(leftJoystick.normalizedX * 10, -leftJoystick.normalizedY * 10)
+
+      if (
+        controls.isLocked ||
+        leftJoystick.isDragging ||
+        rightJoystick.isDragging
+      ) {
         velocity.x = direction.x * options.speed * delta;
         velocity.z = direction.z * options.speed * delta;
         velocity.y = move.up ? options.speed * delta : 0;
@@ -563,6 +794,9 @@
 
       renderer.setClearColor(options.backgroundColor);
       renderer.render(scene, camera);
+
+      leftJoystick.draw()
+      rightJoystick.draw()
     }
 
     function translateGUI() {
@@ -614,6 +848,7 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      positionJoysticks();
     });
   </script>
 </body>
