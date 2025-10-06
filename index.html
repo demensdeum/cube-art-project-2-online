@@ -238,7 +238,7 @@
     }
 
     function handleJoystickMove(id, x, y, isDragging) {
-      if (id == "rightJoystick") {
+      if (id == "leftJoystick") {
         if (x > 0.2) {
           move.left = false
           move.right = true
@@ -591,6 +591,15 @@
       if (document.pointerLockElement === document.body) {
         toggleCubeInFront();
       }
+      else if (
+        !controls.isLocked &&
+        event.clientX > window.innerWidth * 0.3 &&
+        event.clientX < window.innerWidth * 0.7 &&
+        event.clientY > window.innerHeight * 0.3 &&
+        event.clientY < window.innerHeight * 0.7
+      ) {
+        toggleCubeInFront();
+      }
     });
 
     const cursorMaterial = new THREE.MeshBasicMaterial({
@@ -740,7 +749,7 @@
       direction.x = Number(move.right) - Number(move.left);
       direction.normalize();
 
-      handleCameraRotation(leftJoystick.normalizedX * 10, -leftJoystick.normalizedY * 10)
+      handleCameraRotation(rightJoystick.normalizedX * 10, -rightJoystick.normalizedY * 10)
 
       if (
         controls.isLocked ||
