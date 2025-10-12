@@ -328,7 +328,7 @@
 
         statusDiv.textContent = `${playersState} | ${cubesState} (UUID: ${myUUID || 'N/A'})`
         statusDiv.style.color = color
-        statusDiv.style.opacity = 0.1
+        statusDiv.style.opacity = 0.0
         statusDiv.style.userSelect = 'none'
     }
 
@@ -574,6 +574,19 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
+    const INITIAL_AMBIENT_INTENSITY = 0.85;
+    const INITIAL_HEMISPHERE_INTENSITY = 0.85;
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, INITIAL_AMBIENT_INTENSITY);
+    scene.add(ambientLight);
+
+    const hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x777788, INITIAL_HEMISPHERE_INTENSITY);
+    scene.add(hemisphereLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff5e6, 3.5);
+    sunLight.position.set(200, 100, 50);
+    scene.add(sunLight);
+
     const geometry = new THREE.BoxGeometry(1, 1, 1);
 
     const controls = new PointerLockControls(camera, document.body);
@@ -654,7 +667,7 @@
     function addCubeAt(x, y, z, hex, broadcast = true) {
       console.log(hex)
       const hexColor = new THREE.Color(hex).getHex();
-      const material = new THREE.MeshBasicMaterial({ color: hexColor });
+      const material = new THREE.MeshLambertMaterial({ color: hexColor });
       const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
 
       cube.position.x = x;
