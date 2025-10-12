@@ -42,6 +42,7 @@
 </head>
 
 <body>
+  <div id="companySplash" style="background-color: #222222;z-index: 2000;position:absolute;width:100%;height:100%;display: flex;justify-content: center;align-items: center;"><a href="https://demensdeum.com" target="_blank"><img style="width:100%;object-fit:cover;" src="./com.demensdeum.logo.png"></a></div>
   <div id="instructions"><!--SELECTION MODE--></div>
   <div id="status">Connecting...</div>
 
@@ -864,14 +865,20 @@
     }
 
     connectWebSocket()
-    step();
+    step()
 
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
       positionJoysticks();
-    });
+    })
+
+    setTimeout(()=> {
+      const companySplash = document.getElementById("companySplash");
+      companySplash.style.display = 'none';
+    }, 2000)
+
   </script>
 </body>
 
