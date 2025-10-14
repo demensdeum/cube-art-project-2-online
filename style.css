@@ -2,6 +2,9 @@ body {
     margin: 0;
     overflow: hidden;
     background-color: black;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 canvas {

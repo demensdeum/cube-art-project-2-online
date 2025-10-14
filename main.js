@@ -1,7 +1,24 @@
 import * as THREE from './three.module.js'
 import GUI from './lil-gui.module.js'
 import { mustOpenSiteOnCompanyLogoTap } from './config.js'
-import { companySplashTimeout } from './config.js'
+import { companySplashTimeout, SdkIntegration } from './config.js'
+
+class SdkIntegrationDelegate {
+    sdkIntegrationInitialized(sdkIntegration) {
+        console.log("yandex sdk initialized")
+    }
+
+    sdkIntegrationLanguageSwitched(sdkIntegration, language) {
+        options.language = language
+        translateGUI()
+    }
+}
+
+const sdkIntegrationDelegate = new SdkIntegrationDelegate()
+const sdkIntegration = new SdkIntegration(sdkIntegrationDelegate)
+sdkIntegration.load()
+
+document.addEventListener('contextmenu', event => event.preventDefault())
 
 document.handleCompanyLogoTap = () => {
     if (mustOpenSiteOnCompanyLogoTap) {
@@ -236,7 +253,7 @@ rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
 positionJoysticks()
 
 const NandHexColor = 0x8000C0;
-const SignalHexColor = 0xFFD700;
+const SignalHexColor = 0xFFD700
 
 const i18n = {
     en: {
@@ -257,7 +274,7 @@ const i18n = {
         instructions: 'Нажмите, чтобы начать редактирование',
         Language: 'Язык',
     }
-};
+}
 
 const CUBES_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8080`
 const PLAYERS_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8081`
@@ -323,19 +340,19 @@ const onWsCubesMessage = (event) => {
         switch (data.type) {
             case 'stateUpdate':
                 console.log('Received full state update. Synchronizing scene.')
-                const serverCubes = data.cubes;
+                const serverCubes = data.cubes
 
-                const clientCubeKeys = new Set(cubes.keys());
-                const serverCubeKeys = new Set(Object.keys(serverCubes));
+                const clientCubeKeys = new Set(cubes.keys())
+                const serverCubeKeys = new Set(Object.keys(serverCubes))
 
-                console.log(clientCubeKeys);
-                console.log(serverCubes);
+                console.log(clientCubeKeys)
+                console.log(serverCubes)
 
                 for (const key of clientCubeKeys) {
                     if (!serverCubeKeys.has(key)) {
-                        const [x, y, z] = JSON.parse(key);
+                        const [x, y, z] = JSON.parse(key)
                         console.log(`removed cube ${x} ${y} ${z}`)
-                        removeCubeAt(x, y, z, false);
+                        removeCubeAt(x, y, z, false)
                     }
                 }
 
@@ -343,7 +360,7 @@ const onWsCubesMessage = (event) => {
                     if (!clientCubeKeys.has(key)) {
                         const cubeData = serverCubes[key];
                         const hexColor = intToHex(cubeData.color)
-                        addCubeAt(cubeData.x, cubeData.y, cubeData.z, hexColor, false);
+                        addCubeAt(cubeData.x, cubeData.y, cubeData.z, hexColor, false)
                     }
                 }
 
@@ -454,68 +471,68 @@ function intToHex(intColorString) {
 }
 
 function js(object) {
-    return JSON.stringify(object);
+    return JSON.stringify(object)
 }
 
 function handleCameraRotation(x, y) {
-    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-    const PI_2 = Math.PI / 2;
-    const movementX = x || 0;
-    const movementY = y || 0;
-    euler.setFromQuaternion(camera.quaternion);
-    euler.y -= movementX * 0.002;
-    euler.x -= movementY * 0.002;
-    euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x));
-    camera.quaternion.setFromEuler(euler);
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ')
+    const PI_2 = Math.PI / 2
+    const movementX = x || 0
+    const movementY = y || 0
+    euler.setFromQuaternion(camera.quaternion)
+    euler.y -= movementX * 0.002
+    euler.x -= movementY * 0.002
+    euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x))
+    camera.quaternion.setFromEuler(euler)
 }
 
 class PointerLockControls extends THREE.EventDispatcher {
     constructor(camera, domElement) {
-        super();
-        this.domElement = domElement;
-        this.isLocked = false;
+        super()
+        this.domElement = domElement
+        this.isLocked = false
 
-        const scope = this;
+        const scope = this
 
         function onMouseMove(event) {
-            if (!scope.isLocked) return;
+            if (!scope.isLocked) return
             handleCameraRotation(event.movementX, event.movementY)
         }
 
         function onPointerlockChange() {
-            scope.isLocked = document.pointerLockElement === domElement;
+            scope.isLocked = document.pointerLockElement === domElement
         }
 
         function onPointerlockError() {
-            console.error('PointerLockControls: Unable to use Pointer Lock API');
+            console.error('PointerLockControls: Unable to use Pointer Lock API')
         }
 
         this.connect = function () {
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('pointerlockchange', onPointerlockChange);
-            document.addEventListener('pointerlockerror', onPointerlockError);
+            document.addEventListener('mousemove', onMouseMove)
+            document.addEventListener('pointerlockchange', onPointerlockChange)
+            document.addEventListener('pointerlockerror', onPointerlockError)
         };
 
         this.getObject = () => camera;
-        this.lock = () => domElement.requestPointerLock();
-        this.unlock = () => document.exitPointerLock();
+        this.lock = () => domElement.requestPointerLock()
+        this.unlock = () => document.exitPointerLock()
 
         this.getDirection = () => {
-            const direction = new THREE.Vector3(0, 0, -1);
-            return v => v.copy(direction).applyQuaternion(camera.quaternion);
+            const direction = new THREE.Vector3(0, 0, -1)
+            return v => v.copy(direction).applyQuaternion(camera.quaternion)
         };
 
         this.moveForward = (distance) => {
-            const vec = new THREE.Vector3();
-            this.getDirection()(vec);
-            camera.position.addScaledVector(vec, distance);
+            const vec = new THREE.Vector3()
+            this.getDirection()(vec)
+            camera.position.addScaledVector(vec, distance)
         };
 
         this.moveRight = (distance) => {
-            const vec = new THREE.Vector3();
-            this.getDirection()(vec);
-            vec.cross(camera.up);
-            camera.position.addScaledVector(vec, distance);
+            const vec = new THREE.Vector3()
+            this.getDirection()(vec)
+            vec.cross(camera.up)
+            camera.position.addScaledVector(vec, distance)
         };
 
         this.connect();
@@ -575,7 +592,7 @@ document.body.addEventListener('click', (event) => {
     }
 });
 
-const cursorMaterial = new THREE.MeshBasicMaterial({
+const cursorMaterial = new THREE.MeshLambertMaterial({
     color: 0xffffff,
     opacity: 0.5,
     transparent: true
@@ -583,66 +600,66 @@ const cursorMaterial = new THREE.MeshBasicMaterial({
 
 const cursorCube = new THREE.Mesh(
     new THREE.BoxGeometry(1, 1, 1),
-                                    cursorMaterial
+    cursorMaterial
 );
 
-scene.add(cursorCube);
+scene.add(cursorCube)
 
-const move = { forward: false, backward: false, left: false, right: false, up: false, down: false };
+const move = { forward: false, backward: false, left: false, right: false, up: false, down: false }
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 
 document.addEventListener('keydown', e => {
-    if (e.code === 'KeyW') move.forward = true;
-    if (e.code === 'KeyS') move.backward = true;
-    if (e.code === 'KeyA') move.left = true;
-    if (e.code === 'KeyD') move.right = true;
-    if (e.code === 'Space') move.up = true;
-    if (e.code === 'ControlLeft') move.down = true;
+    if (e.code === 'KeyW') move.forward = true
+    if (e.code === 'KeyS') move.backward = true
+    if (e.code === 'KeyA') move.left = true
+    if (e.code === 'KeyD') move.right = true
+    if (e.code === 'Space') move.up = true
+    if (e.code === 'ControlLeft') move.down = true
 });
 
 document.addEventListener('keyup', e => {
-    if (e.code === 'KeyW') move.forward = false;
-    if (e.code === 'KeyS') move.backward = false;
-    if (e.code === 'KeyA') move.left = false;
-    if (e.code === 'KeyD') move.right = false;
-    if (e.code === 'Space') move.up = false;
-    if (e.code === 'KeyF') toggleCubeInFront();
-    if (e.code === 'ControlLeft') move.down = false;
+    if (e.code === 'KeyW') move.forward = false
+    if (e.code === 'KeyS') move.backward = false
+    if (e.code === 'KeyA') move.left = false
+    if (e.code === 'KeyD') move.right = false
+    if (e.code === 'Space') move.up = false
+    if (e.code === 'KeyF') toggleCubeInFront()
+    if (e.code === 'ControlLeft') move.down = false
 });
 
 function clearScene() {
     cubes.forEach((value, key) => {
-        removeCubeAt(value.position.x, value.position.y, value.position.z);
-    });
-    cubes.clear();
-    signalCubes.clear();
-    nandCubes.clear();
+        removeCubeAt(value.position.x, value.position.y, value.position.z)
+    })
+    cubes.clear()
+    signalCubes.clear()
+    nandCubes.clear()
 }
 
 function isThereCubeAt(x, y, z) {
-    return cubes.has(js([x, y, z]));
+    return cubes.has(js([x, y, z]))
 }
 
 function addCubeAt(x, y, z, hex, broadcast = true) {
     console.log(hex)
-    const hexColor = new THREE.Color(hex).getHex();
-    const material = new THREE.MeshLambertMaterial({ color: hexColor });
-    const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+    const hexColor = new THREE.Color(hex).getHex()
+    const material = new THREE.MeshLambertMaterial({ color: hexColor })
+    const cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material)
 
-    cube.position.x = x;
-    cube.position.y = y;
-    cube.position.z = z;
+    cube.position.x = x
+    cube.position.y = y
+    cube.position.z = z
 
-    scene.add(cube);
+    scene.add(cube)
 
-    cubes.set(js([x, y, z]), cube);
+    cubes.set(js([x, y, z]), cube)
 
     if (hexColor == NandHexColor) {
-        nandCubes.set(js([x, y, z]), [x, y, z]);
+        nandCubes.set(js([x, y, z]), [x, y, z])
     }
     else if (hexColor == SignalHexColor) {
-        signalCubes.add(js([x, y, z]));
+        signalCubes.add(js([x, y, z]))
     }
 
     if (broadcast) {
@@ -651,11 +668,11 @@ function addCubeAt(x, y, z, hex, broadcast = true) {
 }
 
 function removeCubeAt(x, y, z, broadcast = true) {
-    const cube = cubes.get(js([x, y, z]));
-    scene.remove(cube);
-    cubes.delete(js([x, y, z]));
-    nandCubes.delete(js([x, y, z]));
-    signalCubes.delete(js([x, y, z]));
+    const cube = cubes.get(js([x, y, z]))
+    scene.remove(cube)
+    cubes.delete(js([x, y, z]))
+    nandCubes.delete(js([x, y, z]))
+    signalCubes.delete(js([x, y, z]))
     if (broadcast) {
         sendRemoveCube(x, y, z)
     }
@@ -663,31 +680,31 @@ function removeCubeAt(x, y, z, broadcast = true) {
 
 function toggleCubeAt(x, y, z, hex) {
     if (isThereCubeAt(x, y, z)) {
-        removeCubeAt(x, y, z);
+        removeCubeAt(x, y, z)
     }
     else {
-        addCubeAt(x, y, z, hex);
+        addCubeAt(x, y, z, hex)
     }
 }
 
 function toggleCubeInFront() {
     const distance = 3;
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
+    const dir = new THREE.Vector3()
+    camera.getWorldDirection(dir)
 
-    const position = new THREE.Vector3();
-    position.copy(camera.position).add(dir.multiplyScalar(distance));
+    const position = new THREE.Vector3()
+    position.copy(camera.position).add(dir.multiplyScalar(distance))
 
-    position.x = Math.round(position.x);
-    position.y = Math.round(position.y);
-    position.z = Math.round(position.z);
+    position.x = Math.round(position.x)
+    position.y = Math.round(position.y)
+    position.z = Math.round(position.z)
 
-    const hexColor = new THREE.Color(options.cubeColor).getHex();
+    const hexColor = new THREE.Color(options.cubeColor).getHex()
 
     toggleCubeAt(position.x, position.y, position.z, hexColor)
 }
 
-const gui = new GUI();
+const gui = new GUI({ width: 160 })
 const options = {
     grid: false,
     axes: false,
@@ -696,30 +713,30 @@ const options = {
     speed: 10,
     backgroundColor: '#000000',
     language: 'en',
-};
+}
 
 const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
 .name(i18n[options.language].Language)
 .onChange(() => {
     translateGUI();
-});
+})
 
-const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor);
-const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor);
+const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor)
+const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor)
 const bgController = gui.addColor(options, 'backgroundColor')
 .name(i18n[options.language].background)
 .onChange(color => renderer.setClearColor(color));
-const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed);
-const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene);
+const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed)
+const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene)
 
-const clock = new THREE.Clock();
+const clock = new THREE.Clock()
 function step() {
-    requestAnimationFrame(step);
+    requestAnimationFrame(step)
 
-    const delta = clock.getDelta();
+    const delta = clock.getDelta()
 
-    direction.z = Number(move.forward) - Number(move.backward);
-    direction.x = Number(move.right) - Number(move.left);
+    direction.z = Number(move.forward) - Number(move.backward)
+    direction.x = Number(move.right) - Number(move.left)
     direction.normalize();
 
     handleCameraRotation(rightJoystick.normalizedX * 10, -rightJoystick.normalizedY * 10)
@@ -729,16 +746,16 @@ function step() {
         leftJoystick.isDragging ||
         rightJoystick.isDragging
     ) {
-        velocity.x = direction.x * options.speed * delta;
-        velocity.z = direction.z * options.speed * delta;
-        velocity.y = move.up ? options.speed * delta : 0;
+        velocity.x = direction.x * options.speed * delta
+        velocity.z = direction.z * options.speed * delta
+        velocity.y = move.up ? options.speed * delta : 0
         if (!move.up) {
-            velocity.y = move.down ? -options.speed * delta : 0;
+            velocity.y = move.down ? -options.speed * delta : 0
         }
 
-        controls.moveRight(velocity.x);
-        controls.moveForward(velocity.z);
-        camera.position.y += velocity.y;
+        controls.moveRight(velocity.x)
+        controls.moveForward(velocity.z)
+        camera.position.y += velocity.y
     }
 
     const now = Date.now()
@@ -763,79 +780,79 @@ function step() {
         }
     }
 
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-    const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3));
-    pos.x = Math.round(pos.x);
-    pos.y = Math.round(pos.y);
-    pos.z = Math.round(pos.z);
-    cursorCube.position.copy(pos);
-    cursorMaterial.color.set(options.cubeColor);
-    cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0;
-    cursorMaterial.visible = options.cursorVisible;
+    const dir = new THREE.Vector3()
+    camera.getWorldDirection(dir)
+    const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3))
+    pos.x = Math.round(pos.x)
+    pos.y = Math.round(pos.y)
+    pos.z = Math.round(pos.z)
+    cursorCube.position.copy(pos)
+    cursorMaterial.color.set(options.cubeColor)
+    cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0
+    cursorMaterial.visible = options.cursorVisible
 
-    renderer.setClearColor(options.backgroundColor);
-    renderer.render(scene, camera);
+    renderer.setClearColor(options.backgroundColor)
+    renderer.render(scene, camera)
 
     leftJoystick.draw()
     rightJoystick.draw()
 }
 
 function translateGUI() {
-    colorController.name(i18n[options.language].cubeColor);
-    cursorController.name(i18n[options.language].showCursor);
-    bgController.name(i18n[options.language].background);
-    speedController.name(i18n[options.language].moveSpeed);
-    saveController.name(i18n[options.language].saveScene);
-    loadController.name(i18n[options.language].loadScene);
-    langController.name(i18n[options.language].Language);
+    colorController.name(i18n[options.language].cubeColor)
+    cursorController.name(i18n[options.language].showCursor)
+    bgController.name(i18n[options.language].background)
+    speedController.name(i18n[options.language].moveSpeed)
+    saveController.name(i18n[options.language].saveScene)
+    loadController.name(i18n[options.language].loadScene)
+    langController.name(i18n[options.language].Language)
 }
 
 function saveSceneToFile() {
     const cameraData = {
         position: [camera.position.x, camera.position.y, camera.position.z],
         rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z]
-    };
+    }
 
-    const serializedCubes = new Array();
+    const serializedCubes = new Array()
 
     cubes.forEach((value, key) => {
         const hex = value.material.color.getHexString();
-        serializedCubes.push([value.position.x, value.position.y, value.position.z, `#${hex}`]);
-    });
+        serializedCubes.push([value.position.x, value.position.y, value.position.z, `#${hex}`])
+    })
 
     const sceneData = {
         header: "Cube Art Project 2 Scene File - 2.0.0",
         camera: cameraData,
         cubes: serializedCubes,
         backgroundColor: options.backgroundColor
-    };
+    }
 
-    const json = js(sceneData, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    const json = js(sceneData, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'scene.cartp2';
-    a.click();
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'scene.cartp2'
+    a.click()
 
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(url)
 }
 
 connectWebSocket()
 step()
 
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    positionJoysticks();
+    camera.aspect = window.innerWidth / window.innerHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    positionJoysticks()
 })
 
 setTimeout(()=> {
-    const companySplash = document.getElementById("companySplash");
-    companySplash.style.display = 'none';
+    const companySplash = document.getElementById("companySplash")
+    companySplash.style.display = 'none'
 }, companySplashTimeout)
 
 if (mustOpenSiteOnCompanyLogoTap) {
