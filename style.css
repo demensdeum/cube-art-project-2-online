@@ -1,0 +1,49 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background-color: black;
+}
+
+canvas {
+    display: block;
+}
+
+#companySplash {
+    background-color: #222222;
+    z-index: 2000;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#companySplashImage {
+    width: 100%;
+    object-fit: cover;
+}
+
+#instructions {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    color: white;
+    font-size: 24px;
+    user-select: none;
+    background: rgba(0, 0, 0, 0);
+    padding-top: 20vh;
+}
+
+#status {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: #00ff00;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+}
