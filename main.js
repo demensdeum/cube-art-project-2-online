@@ -214,6 +214,10 @@ function positionJoysticks() {
     var JOYSTICK_HORIZONTAL_PADDING = 32
     const JOYSTICK_VERTICAL_PADDING = 32
 
+    if (innerHeight < 400) {
+        JOYSTICK_CONTAINER_SIZE = 120
+    }
+
     if (window.innerWidth < JOYSTICK_CONTAINER_SIZE * 2 + JOYSTICK_HORIZONTAL_PADDING * 2) {
         JOYSTICK_CONTAINER_SIZE = window.innerWidth * 0.4
         JOYSTICK_HORIZONTAL_PADDING = 0
@@ -868,8 +872,8 @@ function saveSceneToFile() {
 
 const positionMenu = () => {
     if (window.innerWidth / window.innerHeight < 1) {
-        document.getElementsByClassName("lil-gui")[0].style.scale = 2
-        document.getElementsByClassName("lil-gui")[0].style.right = "150px"
+        document.getElementsByClassName("lil-gui")[0].style.scale =  window.innerWidth < 400 ? 1 : 2
+        document.getElementsByClassName("lil-gui")[0].style.right = window.innerWidth < 400 ? 1 : 150
     } else {
         document.getElementsByClassName("lil-gui")[0].style.scale = 1
         document.getElementsByClassName("lil-gui")[0].style.right = "0px"
