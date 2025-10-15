@@ -5,11 +5,14 @@ import { companySplashTimeout, SdkIntegration } from './config.js'
 
 class SdkIntegrationDelegate {
     sdkIntegrationInitialized(sdkIntegration) {
-        console.log("yandex sdk initialized")
+        console.log("SDK integration initialized")
     }
 
     sdkIntegrationLanguageSwitched(sdkIntegration, language) {
-        options.language = language
+        const newLanguage = language == 'ru' ? 'ru' : 'en'
+        console.log(`document.__global_options: ${document.__global_options}`)
+        const options = document.__global_options
+        options.language = newLanguage
         translateGUI()
     }
 }
@@ -715,6 +718,8 @@ const options = {
     language: 'en',
 }
 
+document.__global_options = options
+
 const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
 .name(i18n[options.language].Language)
 .onChange(() => {
@@ -723,13 +728,14 @@ const langController = gui.add(options, 'language', { English: 'en', Русск�
 
 const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor)
 const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor)
-const bgController = gui.addColor(options, 'backgroundColor')
+const backgroundColorController = gui.addColor(options, 'backgroundColor')
 .name(i18n[options.language].background)
 .onChange(color => renderer.setClearColor(color));
 const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed)
 const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene)
 
 const clock = new THREE.Clock()
+
 function step() {
     requestAnimationFrame(step)
 
@@ -801,11 +807,11 @@ function step() {
 function translateGUI() {
     colorController.name(i18n[options.language].cubeColor)
     cursorController.name(i18n[options.language].showCursor)
-    bgController.name(i18n[options.language].background)
+    backgroundColorController.name(i18n[options.language].background)
     speedController.name(i18n[options.language].moveSpeed)
     saveController.name(i18n[options.language].saveScene)
-    loadController.name(i18n[options.language].loadScene)
     langController.name(i18n[options.language].Language)
+    langController.updateDisplay()
 }
 
 function saveSceneToFile() {
