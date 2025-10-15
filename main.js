@@ -1,7 +1,7 @@
 import * as THREE from './three.module.js'
 import GUI from './lil-gui.module.js'
 import { mustOpenSiteOnCompanyLogoTap } from './config.js'
-import { companySplashTimeout, SdkIntegration } from './config.js'
+import { companySplashTimeout, SdkIntegration, fullMenu } from './config.js'
 
 class SdkIntegrationDelegate {
     sdkIntegrationInitialized(sdkIntegration) {
@@ -28,11 +28,6 @@ document.handleCompanyLogoTap = () => {
         window.open('https://www.demensdeum.com', '_blank')
     }
 }
-
-const JOYSTICK_HORIZONTAL_PADDING = 32
-const JOYSTICK_VERTICAL_PADDING = 32
-const JOYSTICK_CONTAINER_SIZE = 240
-const JOYSTICK_Z_DEPTH = 1000
 
 class Joystick {
     constructor(id, delegate, size) {
@@ -206,7 +201,32 @@ class Joystick {
     }
 }
 
+var leftJoystick = null
+var rightJoystick = null
+
 function positionJoysticks() {
+    const joystickNames = ["leftJoystick", "rightJoystick"]
+    for (const joystickName of joystickNames) {
+        document.getElementById(`joystick${joystickName}_container`)?.remove()
+    }
+
+    var JOYSTICK_CONTAINER_SIZE = 240
+    var JOYSTICK_HORIZONTAL_PADDING = 32
+    const JOYSTICK_VERTICAL_PADDING = 32
+
+    if (window.innerWidth < JOYSTICK_CONTAINER_SIZE * 2 + JOYSTICK_HORIZONTAL_PADDING * 2) {
+        JOYSTICK_CONTAINER_SIZE = window.innerWidth * 0.4
+        JOYSTICK_HORIZONTAL_PADDING = 0
+    }
+
+    const JOYSTICK_Z_DEPTH = 1000
+
+    leftJoystick = new Joystick("leftJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+    rightJoystick = new Joystick("rightJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+
+    leftJoystick.placeJoystickAt(0, 0, 1000)
+    rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
+
     const leftX = JOYSTICK_HORIZONTAL_PADDING
     const leftY = window.innerHeight - JOYSTICK_CONTAINER_SIZE - JOYSTICK_VERTICAL_PADDING
 
@@ -248,11 +268,6 @@ function handleJoystickMove(id, x, y, isDragging) {
     }
 }
 
-const leftJoystick = new Joystick("leftJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
-const rightJoystick = new Joystick("rightJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
-
-leftJoystick.placeJoystickAt(0,0, 1000)
-rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
 positionJoysticks()
 
 const NandHexColor = 0x8000C0;
@@ -260,20 +275,20 @@ const SignalHexColor = 0xFFD700
 
 const i18n = {
     en: {
-        cubeColor: 'Cube Color',
-        showCursor: 'Show Cursor',
+        cubeColor: 'Color',
+        showCursor: 'Cursor',
         background: 'Background',
-        moveSpeed: 'Move Speed',
-        saveScene: '💾 Save Scene',
+        moveSpeed: 'Speed',
+        saveScene: '💾 Save',
         instructions: 'Click to start editing',
         Language: 'Language',
     },
     ru: {
-        cubeColor: 'Цвет куба',
-        showCursor: 'Показать курсор',
+        cubeColor: 'Цвет',
+        showCursor: 'Курсор',
         background: 'Фон',
-        moveSpeed: 'Скорость перемещения',
-        saveScene: '💾 Сохранить сцену',
+        moveSpeed: 'Скорость',
+        saveScene: '💾 Сохранить',
         instructions: 'Нажмите, чтобы начать редактирование',
         Language: 'Язык',
     }
@@ -707,7 +722,7 @@ function toggleCubeInFront() {
     toggleCubeAt(position.x, position.y, position.z, hexColor)
 }
 
-const gui = new GUI({ width: 160 })
+const gui = new GUI()
 const options = {
     grid: false,
     axes: false,
@@ -720,19 +735,24 @@ const options = {
 
 document.__global_options = options
 
-const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
-.name(i18n[options.language].Language)
-.onChange(() => {
-    translateGUI();
-})
+if (fullMenu) {
+    const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
+    .name(i18n[options.language].Language)
+    .onChange(() => {
+        translateGUI();
+    })
+}
 
 const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor)
-const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor)
-const backgroundColorController = gui.addColor(options, 'backgroundColor')
-.name(i18n[options.language].background)
-.onChange(color => renderer.setClearColor(color));
-const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed)
-const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene)
+
+if (fullMenu) {
+    const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor)
+    const backgroundColorController = gui.addColor(options, 'backgroundColor')
+    .name(i18n[options.language].background)
+    .onChange(color => renderer.setClearColor(color));
+    const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed)
+    const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene)
+}
 
 const clock = new THREE.Clock()
 
@@ -846,6 +866,17 @@ function saveSceneToFile() {
     URL.revokeObjectURL(url)
 }
 
+const positionMenu = () => {
+    if (window.innerWidth / window.innerHeight < 1) {
+        document.getElementsByClassName("lil-gui")[0].style.scale = 2
+        document.getElementsByClassName("lil-gui")[0].style.right = "150px"
+    } else {
+        document.getElementsByClassName("lil-gui")[0].style.scale = 1
+        document.getElementsByClassName("lil-gui")[0].style.right = "0px"
+    }
+}
+
+positionMenu()
 connectWebSocket()
 step()
 
@@ -854,6 +885,7 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix()
     renderer.setSize(window.innerWidth, window.innerHeight)
     positionJoysticks()
+    positionMenu()
 })
 
 setTimeout(()=> {
