@@ -1,7 +1,12 @@
 import * as THREE from './three.module.js'
 import GUI from './lil-gui.module.js'
 import { mustOpenSiteOnCompanyLogoTap } from './config.js'
-import { companySplashTimeout, SdkIntegration, fullMenu } from './config.js'
+import {
+    noHotkeys,
+    companySplashTimeout,
+    SdkIntegration,
+    fullMenu
+} from './config.js'
 
 class SdkIntegrationDelegate {
     sdkIntegrationInitialized(sdkIntegration) {
@@ -637,7 +642,8 @@ document.addEventListener('keydown', e => {
     if (e.code === 'KeyA') move.left = true
     if (e.code === 'KeyD') move.right = true
     if (e.code === 'Space') move.up = true
-    if (e.code === 'ControlLeft') move.down = true
+    const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
+    if (e.code === goDownKey) move.down = true
 });
 
 document.addEventListener('keyup', e => {
@@ -647,7 +653,8 @@ document.addEventListener('keyup', e => {
     if (e.code === 'KeyD') move.right = false
     if (e.code === 'Space') move.up = false
     if (e.code === 'KeyF') toggleCubeInFront()
-    if (e.code === 'ControlLeft') move.down = false
+    const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
+    if (e.code === goDownKey) move.down = false
 });
 
 function clearScene() {
@@ -871,12 +878,14 @@ function saveSceneToFile() {
 }
 
 const positionMenu = () => {
-    if (window.innerWidth / window.innerHeight < 1) {
-        document.getElementsByClassName("lil-gui")[0].style.scale =  window.innerWidth < 400 ? 1 : 2
-        document.getElementsByClassName("lil-gui")[0].style.right = window.innerWidth < 400 ? 1 : 150
-    } else {
-        document.getElementsByClassName("lil-gui")[0].style.scale = 1
-        document.getElementsByClassName("lil-gui")[0].style.right = "0px"
+    if (!fullMenu) {
+        if (window.innerWidth / window.innerHeight < 1) {
+            document.getElementsByClassName("lil-gui")[0].style.scale =  window.innerWidth < 400 ? 1 : 2
+            document.getElementsByClassName("lil-gui")[0].style.right = window.innerWidth < 400 ? 1 : 150
+        } else {
+            document.getElementsByClassName("lil-gui")[0].style.scale = 1
+            document.getElementsByClassName("lil-gui")[0].style.right = "0px"
+        }
     }
 }
 
@@ -895,6 +904,7 @@ window.addEventListener('resize', () => {
 setTimeout(()=> {
     const companySplash = document.getElementById("companySplash")
     companySplash.style.display = 'none'
+    sdkIntegration.handleGameStart()
 }, companySplashTimeout)
 
 if (mustOpenSiteOnCompanyLogoTap) {
