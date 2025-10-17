@@ -77,7 +77,7 @@ export class Joystick {
         this.delegate(this.id, this.normalizedX, this.normalizedY, this.isDragging)
     }
 
-    draw() {
+    draw(options) {
         const ctx = this.ctx
 
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)

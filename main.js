@@ -8,13 +8,19 @@ import {
     fullMenu
 } from './config.js'
 import { SdkIntegrationDelegate } from './sdkIntegrationDelegate.js'
+import { Joystick } from './joystick.js'
+import { PointerLockControls } from './pointerLockControls.js'
 
 class Game {
     constructor() {
+        document.__global_game = this
+    }
+
+    start() {
         this.leftJoystick = null
         this.rightJoystick = null
         this.sdkIntegrationDelegate = new SdkIntegrationDelegate()
-        this.sdkIntegration = new SdkIntegration(sdkIntegrationDelegate)
+        this.sdkIntegration = new SdkIntegration(this.sdkIntegrationDelegate)
         this.sdkIntegration.load()
 
         document.addEventListener('contextmenu', event => event.preventDefault())
@@ -24,6 +30,190 @@ class Game {
                 window.open('https://www.demensdeum.com', '_blank')
             }
         }
+
+        this.positionJoysticks()
+
+        this.i18n = {
+            en: {
+                cubeColor: 'Color',
+                showCursor: 'Cursor',
+                background: 'Background',
+                moveSpeed: 'Speed',
+                saveScene: '💾 Save',
+                instructions: 'Click to start editing',
+                Language: 'Language',
+            },
+            ru: {
+                cubeColor: 'Цвет',
+                showCursor: 'Курсор',
+                background: 'Фон',
+                moveSpeed: 'Скорость',
+                saveScene: '💾 Сохранить',
+                instructions: 'Нажмите, чтобы начать редактирование',
+                Language: 'Язык',
+            }
+        }
+
+        this.CUBES_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8080`
+        this.PLAYERS_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8081`
+
+        this.wsCubes = null
+        this.wsPlayers = null
+        this.myUUID = null
+        this.lastSentPosition = new THREE.Vector3()
+        this.REMOTE_PLAYER_MESH_COLOR = 0x00ffff
+        this.remotePlayers = new Map()
+        this.remotePlayerGeometry = new THREE.SphereGeometry(0.4, 16, 16)
+        this.remotePlayerMaterial = new THREE.MeshBasicMaterial({ color: this.REMOTE_PLAYER_MESH_COLOR })
+        this.PLAYER_MOVE_SEND_INTERVAL_MS = 50
+        this.lastMoveSendTime = 0
+
+        this.cubes = new Map()
+        this.signalCubes = new Set()
+        this.nandCubes = new Map()
+
+        this.scene = new THREE.Scene()
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+        this.camera.position.set(0, 0, 0)
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true })
+        this.renderer.setSize(window.innerWidth, window.innerHeight)
+        document.body.appendChild(this.renderer.domElement)
+
+        this.INITIAL_AMBIENT_INTENSITY = 0.85
+        this.INITIAL_HEMISPHERE_INTENSITY = 0.85
+
+        this.ambientLight = new THREE.AmbientLight(0xffffff, this.INITIAL_AMBIENT_INTENSITY)
+        this.scene.add(this.ambientLight)
+
+        this.hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x777788, this.INITIAL_HEMISPHERE_INTENSITY)
+        this.scene.add(this.hemisphereLight)
+
+        this.sunLight = new THREE.DirectionalLight(0xfff5e6, 3.5)
+        this.sunLight.position.set(200, 100, 50)
+        this.scene.add(this.sunLight)
+
+        this.geometry = new THREE.BoxGeometry(1, 1, 1)
+
+        this.controls = new PointerLockControls(this.camera, document.body)
+        this.scene.add(this.controls.getObject())
+
+        this.instructions = document.getElementById('instructions')
+        instructions.addEventListener('click', () => document.__global_game.controls.lock())
+
+        document.addEventListener('pointerlockchange', () => {
+            const isLocked = document.pointerLockElement === document.body
+            instructions.style.display = isLocked ? 'none' : ''
+        });
+
+        document.body.addEventListener('click', (event) => {
+            if (document.pointerLockElement === document.body) {
+                document.__global_game.toggleCubeInFront()
+            }
+            else if (
+                !document.__global_game.controls.isLocked &&
+                event.clientX > window.innerWidth * 0.3 &&
+                event.clientX < window.innerWidth * 0.7 &&
+                event.clientY > window.innerHeight * 0.3 &&
+                event.clientY < window.innerHeight * 0.7
+            ) {
+                document.__global_game.toggleCubeInFront()
+            }
+        });
+
+        this.cursorMaterial = new THREE.MeshLambertMaterial({
+            color: 0xffffff,
+            opacity: 0.5,
+            transparent: true
+        });
+
+        this.cursorCube = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+                                          this.cursorMaterial
+        );
+
+        this.scene.add(this.cursorCube)
+
+        this.move = { forward: false, backward: false, left: false, right: false, up: false, down: false }
+        this.velocity = new THREE.Vector3();
+        this.direction = new THREE.Vector3();
+
+        document.addEventListener('keydown', e => {
+            if (e.code === 'KeyW') document.__global_game.move.forward = true
+                if (e.code === 'KeyS') document.__global_game.move.backward = true
+                    if (e.code === 'KeyA') document.__global_game.move.left = true
+                        if (e.code === 'KeyD') document.__global_game.move.right = true
+                            if (e.code === 'Space') document.__global_game.move.up = true
+                                const goDownKey = document.__global_game.noHotkeys ? 'KeyC' : 'ControlLeft'
+                                if (e.code === goDownKey) document.__global_game.move.down = true
+        });
+
+            document.addEventListener('keyup', e => {
+                if (e.code === 'KeyW') document.__global_game.move.forward = false
+                    if (e.code === 'KeyS') document.__global_game.move.backward = false
+                        if (e.code === 'KeyA') document.__global_game.move.left = false
+                            if (e.code === 'KeyD') document.__global_game.move.right = false
+                                if (e.code === 'Space') document.__global_game.move.up = false
+                                    if (e.code === 'KeyF') document.__global_game.toggleCubeInFront()
+                                        const goDownKey = document.__global_game.noHotkeys ? 'KeyC' : 'ControlLeft'
+                                        if (e.code === goDownKey) document.__global_game.move.down = false
+            });
+
+                this.gui = new GUI()
+                this.options = {
+                    grid: false,
+                    axes: false,
+                    cubeColor: '#ffffff',
+                    cursorVisible: true,
+                    speed: 10,
+                    backgroundColor: '#000000',
+                    language: 'en',
+                }
+
+                document.__global_options = this.options
+
+                if (fullMenu) {
+                    const langController = this.gui.add(this.options, 'language', { English: 'en', Русский: 'ru' })
+                    .name(this.i18n[this.options.language].Language)
+                    .onChange(() => {
+                        translateGUI();
+                    })
+                }
+
+                const colorController = this.gui.addColor(this.options, 'cubeColor').name(this.i18n[this.options.language].cubeColor)
+
+                if (fullMenu) {
+                    const cursorController = this.gui.add(this.options, 'cursorVisible').name(this.i18n[this.options.language].showCursor)
+                    const backgroundColorController = this.gui.addColor(this.options, 'backgroundColor')
+                    .name(this.i18n[this.options.language].background)
+                    .onChange(color => renderer.setClearColor(color));
+                    const speedController = this.gui.add(this.options, 'speed', 0.1, 100, 0.1).name(this.i18n[this.options.language].moveSpeed)
+                    const saveController = this.gui.add({ save: this.saveSceneToFile }, 'save').name(this.i18n[this.options.language].saveScene)
+                }
+
+                window.addEventListener('resize', () => {
+                    document.__global_game.camera.aspect = window.innerWidth / window.innerHeight
+                    document.__global_game.camera.updateProjectionMatrix()
+                    document.__global_game.renderer.setSize(window.innerWidth, window.innerHeight)
+                    document.__global_game.positionJoysticks()
+                    document.__global_game.positionMenu()
+                })
+
+                setTimeout(()=> {
+                    const companySplash = document.getElementById("companySplash")
+                    companySplash.style.display = 'none'
+                    document.__global_game.sdkIntegration.handleGameStart()
+                }, companySplashTimeout)
+
+                if (mustOpenSiteOnCompanyLogoTap) {
+                    document.getElementById("companySplash").style.cursor = "pointer"
+                }
+
+                this.clock = new THREE.Clock()
+
+                this.positionMenu()
+                this.connectWebSocket()
+                this.step()
     }
 
     positionJoysticks() {
@@ -47,11 +237,11 @@ class Game {
 
         const JOYSTICK_Z_DEPTH = 1000
 
-        leftJoystick = new Joystick("leftJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
-        rightJoystick = new Joystick("rightJoystick", handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+        this.leftJoystick = new Joystick("leftJoystick", this.handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
+        this.rightJoystick = new Joystick("rightJoystick", this.handleJoystickMove, JOYSTICK_CONTAINER_SIZE)
 
-        leftJoystick.placeJoystickAt(0, 0, 1000)
-        rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
+        this.leftJoystick.placeJoystickAt(0, 0, 1000)
+        this.rightJoystick.placeJoystickAt(0, JOYSTICK_CONTAINER_SIZE, 1000)
 
         const leftX = JOYSTICK_HORIZONTAL_PADDING
         const leftY = window.innerHeight - JOYSTICK_CONTAINER_SIZE - JOYSTICK_VERTICAL_PADDING
@@ -59,8 +249,8 @@ class Game {
         const rightX = window.innerWidth - JOYSTICK_CONTAINER_SIZE - JOYSTICK_HORIZONTAL_PADDING
         const rightY = window.innerHeight - JOYSTICK_CONTAINER_SIZE - JOYSTICK_VERTICAL_PADDING
 
-        leftJoystick.placeJoystickAt(leftX, leftY, JOYSTICK_Z_DEPTH)
-        rightJoystick.placeJoystickAt(rightX, rightY, JOYSTICK_Z_DEPTH)
+        this.leftJoystick.placeJoystickAt(leftX, leftY, JOYSTICK_Z_DEPTH)
+        this.rightJoystick.placeJoystickAt(rightX, rightY, JOYSTICK_Z_DEPTH)
     }
 
     handleJoystickMove(id, x, y, isDragging) {
@@ -94,79 +284,39 @@ class Game {
         }
     }
 
-    positionJoysticks()
-
-    const NandHexColor = 0x8000C0;
-    const SignalHexColor = 0xFFD700
-
-    const i18n = {
-        en: {
-            cubeColor: 'Color',
-            showCursor: 'Cursor',
-            background: 'Background',
-            moveSpeed: 'Speed',
-            saveScene: '💾 Save',
-            instructions: 'Click to start editing',
-            Language: 'Language',
-        },
-        ru: {
-            cubeColor: 'Цвет',
-            showCursor: 'Курсор',
-            background: 'Фон',
-            moveSpeed: 'Скорость',
-            saveScene: '💾 Сохранить',
-            instructions: 'Нажмите, чтобы начать редактирование',
-            Language: 'Язык',
-        }
-    }
-
-    const CUBES_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8080`
-    const PLAYERS_WS_URL = `wss://tinydemens1.vps.webdock.cloud:8081`
-
-    let wsCubes = null
-    let wsPlayers = null
-    let myUUID = null
-    let lastSentPosition = new THREE.Vector3()
-    const REMOTE_PLAYER_MESH_COLOR = 0x00ffff
-    const remotePlayers = new Map()
-    const remotePlayerGeometry = new THREE.SphereGeometry(0.4, 16, 16)
-    const remotePlayerMaterial = new THREE.MeshBasicMaterial({ color: REMOTE_PLAYER_MESH_COLOR })
-    const PLAYER_MOVE_SEND_INTERVAL_MS = 50
-    let lastMoveSendTime = 0
-
-    const updateStatus = () => {
+    updateStatus() {
         const statusDiv = document.getElementById('status')
-        const cubesState = wsCubes?.readyState === wsCubes?.OPEN ? 'Cubes: Open' : 'Cubes: Closed'
-        const playersState = wsPlayers?.readyState === wsPlayers?.OPEN ? 'Players: Open' : 'Players: Closed'
+        const cubesState = this.wsCubes?.readyState === this.wsCubes?.OPEN ? 'Cubes: Open' : 'Cubes: Closed'
+        const playersState = this.wsPlayers?.readyState === this.wsPlayers?.OPEN ? 'Players: Open' : 'Players: Closed'
 
         let color = '#ff0000'
-        if (wsCubes?.readyState === wsCubes?.OPEN || wsPlayers?.readyState === wsPlayers?.OPEN) {
+        if (this.wsCubes?.readyState === this.wsCubes?.OPEN || this.wsPlayers?.readyState === this.wsPlayers?.OPEN) {
             color = '#ffff00'
         }
-        if (wsCubes?.readyState === wsCubes?.OPEN && wsPlayers?.readyState === wsPlayers?.OPEN) {
+        if (this.wsCubes?.readyState === this.wsCubes?.OPEN && this.wsPlayers?.readyState === this.wsPlayers?.OPEN) {
             color = '#00ff00'
         }
 
-        statusDiv.textContent = `${playersState} | ${cubesState} (UUID: ${myUUID || 'N/A'})`
+        statusDiv.textContent = `${playersState} | ${cubesState} (UUID: ${this.myUUID || 'N/A'})`
         statusDiv.style.color = color
         statusDiv.style.opacity = 0.0
         statusDiv.style.userSelect = 'none'
     }
 
-    const onWsPlayersMessage = (event) => {
+    onWsPlayersMessage(event) {
         try {
             const data = JSON.parse(event.data)
 
             switch (data.type) {
                 case 'playerCreated':
-                    myUUID = data.player.uuid
-                    camera.position.set(data.player.x, data.player.y, data.player.z)
-                    updateStatus()
-                    console.log('My UUID is:', myUUID)
+                    document.__global_game.myUUID = data.player.uuid
+                    document.__global_game.camera.position.set(data.player.x, data.player.y, data.player.z)
+                    document.__global_game.updateStatus()
+                    console.log('My UUID is:', document.__global_game.myUUID)
                     break
 
                 case 'playersUpdate':
-                    updateRemotePlayers(data.players)
+                    document.__global_game.updateRemotePlayers(data.players)
                     break
 
                 default:
@@ -178,15 +328,15 @@ class Game {
         }
     }
 
-    const onWsCubesMessage = (event) => {
-        try {
+    onWsCubesMessage = (event) => {
+        //try {
             const data = JSON.parse(event.data)
             switch (data.type) {
                 case 'stateUpdate':
                     console.log('Received full state update. Synchronizing scene.')
                     const serverCubes = data.cubes
 
-                    const clientCubeKeys = new Set(cubes.keys())
+                    const clientCubeKeys = new Set(document.__global_game.cubes.keys())
                     const serverCubeKeys = new Set(Object.keys(serverCubes))
 
                     console.log(clientCubeKeys)
@@ -202,13 +352,13 @@ class Game {
 
                     for (const key in serverCubes) {
                         if (!clientCubeKeys.has(key)) {
-                            const cubeData = serverCubes[key];
-                            const hexColor = intToHex(cubeData.color)
-                            addCubeAt(cubeData.x, cubeData.y, cubeData.z, hexColor, false)
+                            const cubeData = serverCubes[key]
+                            const hexColor = document.__global_game.intToHex(cubeData.color)
+                            this.addCubeAt(cubeData.x, cubeData.y, cubeData.z, hexColor, false)
                         }
                     }
 
-                    console.log(`Scene synchronized. Cubes on server: ${serverCubeKeys.size}. Cubes now on client: ${cubes.size}.`)
+                    console.log(`Scene synchronized. Cubes on server: ${serverCubeKeys.size}. Cubes now on client: ${this.cubes.size}.`)
                     break
 
                 default:
@@ -216,15 +366,15 @@ class Game {
                     break
             }
 
-        } catch (e) {
-            console.error('Failed to parse incoming cubes message:', e)
-        }
+        // } catch (e) {
+        //     console.error('Failed to parse incoming cubes message:', e)
+        // }
     }
 
-    const sendAddCube = (x, y, z, hexColor) => {
+    sendAddCube = (x, y, z, hexColor) => {
         console.log(hexColor)
-        if (wsCubes?.readyState === wsCubes?.OPEN) {
-            wsCubes.send(js({
+        if (document.__global_game.wsCubes?.readyState === document.__global_game.wsCubes?.OPEN) {
+            document.__global_game.wsCubes.send(document.__global_game.js({
                 method: 'addCube',
                 x: x,
                 y: y,
@@ -236,9 +386,9 @@ class Game {
         }
     }
 
-    const sendRemoveCube = (x, y, z) => {
-        if (wsCubes?.readyState === wsCubes?.OPEN) {
-            wsCubes.send(js({
+    sendRemoveCube = (x, y, z) => {
+        if (document.__global_game.wsCubes?.readyState === document.__global_game.wsCubes?.OPEN) {
+            document.__global_game.wsCubes.send(document.__global_game.js({
                 method: 'removeCube',
                 x: x,
                 y: y,
@@ -249,64 +399,64 @@ class Game {
         }
     }
 
-    const updateRemotePlayers = (serverPlayers) => {
+    updateRemotePlayers = (serverPlayers) => {
         const receivedUUIDs = new Set()
 
         for (const uuid in serverPlayers) {
             const player = serverPlayers[uuid]
             receivedUUIDs.add(uuid)
 
-            if (uuid === myUUID) continue
+            if (uuid === document.__global_game.myUUID) continue
 
-                if (!remotePlayers.has(uuid)) {
-                    const mesh = new THREE.Mesh(remotePlayerGeometry, remotePlayerMaterial)
-                    scene.add(mesh)
-                    remotePlayers.set(uuid, { mesh })
+                if (!document.__global_game.remotePlayers.has(uuid)) {
+                    const mesh = new THREE.Mesh(document.__global_game.remotePlayerGeometry, document.__global_game.remotePlayerMaterial)
+                    document.__global_game.scene.add(mesh)
+                    document.__global_game.remotePlayers.set(uuid, { mesh })
                 }
 
-                const remotePlayer = remotePlayers.get(uuid)
+                const remotePlayer = document.__global_game.remotePlayers.get(uuid)
                 if (remotePlayer) {
                     remotePlayer.mesh.position.set(player.x, player.y, player.z)
                 }
         }
 
         const playersToRemove = []
-        for (const [uuid, remotePlayer] of remotePlayers.entries()) {
+        for (const [uuid, remotePlayer] of document.__global_game.remotePlayers.entries()) {
             if (!receivedUUIDs.has(uuid)) {
                 playersToRemove.push(uuid)
-                scene.remove(remotePlayer.mesh)
+                document.__global_game.scene.remove(remotePlayer.mesh)
             }
         }
 
         playersToRemove.forEach(uuid => {
-            remotePlayers.delete(uuid)
+            document.__global_game.remotePlayers.delete(uuid)
             console.log(`Removed remote player: ${uuid}`)
         })
     }
 
-    const connectWebSocket = () => {
-        wsPlayers = new WebSocket(PLAYERS_WS_URL)
-        wsPlayers.onopen = () => {
-            updateStatus()
-            wsPlayers.send(JSON.stringify({ method: 'addPlayer' }))
+    connectWebSocket = () => {
+        this.wsPlayers = new WebSocket(this.PLAYERS_WS_URL)
+        this.wsPlayers.onopen = () => {
+            this.updateStatus()
+            this.wsPlayers.send(JSON.stringify({ method: 'addPlayer' }))
         }
-        wsPlayers.onmessage = onWsPlayersMessage
-        wsPlayers.onerror = updateStatus
-        wsPlayers.onclose = () => {
+        this.wsPlayers.onmessage = this.onWsPlayersMessage
+        this.wsPlayers.onerror = this.updateStatus
+        this.wsPlayers.onclose = () => {
             myUUID = null
             updateStatus()
         }
 
-        wsCubes = new WebSocket(CUBES_WS_URL)
-        wsCubes.onopen = updateStatus
-        wsCubes.onmessage = onWsCubesMessage
-        wsCubes.onerror = updateStatus
-        wsCubes.onclose = updateStatus
+        this.wsCubes = new WebSocket(this.CUBES_WS_URL)
+        this.wsCubes.onopen = this.updateStatus
+        this.wsCubes.onmessage = this.onWsCubesMessage
+        this.wsCubes.onerror = this.updateStatus
+        this.wsCubes.onclose = this.updateStatus
 
-        updateStatus()
+        this.updateStatus()
     }
 
-    function intToHex(intColorString) {
+    intToHex(intColorString) {
         const intColor = parseInt(intColorString, 10)
         if (isNaN(intColor) || intColor < 0 || intColor > 0xFFFFFF) {
             return '#ffffff'
@@ -314,167 +464,23 @@ class Game {
         return '#' + intColor.toString(16).padStart(6, '0')
     }
 
-    function js(object) {
+    js(object) {
         return JSON.stringify(object)
     }
 
-    function handleCameraRotation(x, y) {
+    handleCameraRotation(x, y) {
         const euler = new THREE.Euler(0, 0, 0, 'YXZ')
         const PI_2 = Math.PI / 2
         const movementX = x || 0
         const movementY = y || 0
-        euler.setFromQuaternion(camera.quaternion)
+        euler.setFromQuaternion(this.camera.quaternion)
         euler.y -= movementX * 0.002
         euler.x -= movementY * 0.002
         euler.x = Math.max(-PI_2, Math.min(PI_2, euler.x))
-        camera.quaternion.setFromEuler(euler)
+        this.camera.quaternion.setFromEuler(euler)
     }
 
-    class PointerLockControls extends THREE.EventDispatcher {
-        constructor(camera, domElement) {
-            super()
-            this.domElement = domElement
-            this.isLocked = false
-
-            const scope = this
-
-            function onMouseMove(event) {
-                if (!scope.isLocked) return
-                handleCameraRotation(event.movementX, event.movementY)
-            }
-
-            function onPointerlockChange() {
-                scope.isLocked = document.pointerLockElement === domElement
-            }
-
-            function onPointerlockError() {
-                console.error('PointerLockControls: Unable to use Pointer Lock API')
-            }
-
-            this.connect = function () {
-                document.addEventListener('mousemove', onMouseMove)
-                document.addEventListener('pointerlockchange', onPointerlockChange)
-                document.addEventListener('pointerlockerror', onPointerlockError)
-            };
-
-            this.getObject = () => camera;
-            this.lock = () => domElement.requestPointerLock()
-            this.unlock = () => document.exitPointerLock()
-
-            this.getDirection = () => {
-                const direction = new THREE.Vector3(0, 0, -1)
-                return v => v.copy(direction).applyQuaternion(camera.quaternion)
-            };
-
-            this.moveForward = (distance) => {
-                const vec = new THREE.Vector3()
-                this.getDirection()(vec)
-                camera.position.addScaledVector(vec, distance)
-            };
-
-            this.moveRight = (distance) => {
-                const vec = new THREE.Vector3()
-                this.getDirection()(vec)
-                vec.cross(camera.up)
-                camera.position.addScaledVector(vec, distance)
-            };
-
-            this.connect();
-        }
-    }
-
-    let cubes = new Map()
-    let signalCubes = new Set()
-    let nandCubes = new Map()
-
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-    camera.position.set(0, 0, 0)
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
-    renderer.setSize(window.innerWidth, window.innerHeight)
-    document.body.appendChild(renderer.domElement)
-
-    const INITIAL_AMBIENT_INTENSITY = 0.85
-    const INITIAL_HEMISPHERE_INTENSITY = 0.85
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, INITIAL_AMBIENT_INTENSITY)
-    scene.add(ambientLight)
-
-    const hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x777788, INITIAL_HEMISPHERE_INTENSITY)
-    scene.add(hemisphereLight)
-
-    const sunLight = new THREE.DirectionalLight(0xfff5e6, 3.5)
-    sunLight.position.set(200, 100, 50)
-    scene.add(sunLight)
-
-    const geometry = new THREE.BoxGeometry(1, 1, 1)
-
-    const controls = new PointerLockControls(camera, document.body)
-    scene.add(controls.getObject())
-
-    const instructions = document.getElementById('instructions')
-    instructions.addEventListener('click', () => controls.lock())
-
-    document.addEventListener('pointerlockchange', () => {
-        const isLocked = document.pointerLockElement === document.body
-        instructions.style.display = isLocked ? 'none' : ''
-    });
-
-    document.body.addEventListener('click', (event) => {
-        if (document.pointerLockElement === document.body) {
-            toggleCubeInFront()
-        }
-        else if (
-            !controls.isLocked &&
-            event.clientX > window.innerWidth * 0.3 &&
-            event.clientX < window.innerWidth * 0.7 &&
-            event.clientY > window.innerHeight * 0.3 &&
-            event.clientY < window.innerHeight * 0.7
-        ) {
-            toggleCubeInFront()
-        }
-    });
-
-    const cursorMaterial = new THREE.MeshLambertMaterial({
-        color: 0xffffff,
-        opacity: 0.5,
-        transparent: true
-    });
-
-    const cursorCube = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 1, 1),
-        cursorMaterial
-    );
-
-    scene.add(cursorCube)
-
-    const move = { forward: false, backward: false, left: false, right: false, up: false, down: false }
-    const velocity = new THREE.Vector3();
-    const direction = new THREE.Vector3();
-
-    document.addEventListener('keydown', e => {
-        if (e.code === 'KeyW') move.forward = true
-        if (e.code === 'KeyS') move.backward = true
-        if (e.code === 'KeyA') move.left = true
-        if (e.code === 'KeyD') move.right = true
-        if (e.code === 'Space') move.up = true
-        const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
-        if (e.code === goDownKey) move.down = true
-    });
-
-    document.addEventListener('keyup', e => {
-        if (e.code === 'KeyW') move.forward = false
-        if (e.code === 'KeyS') move.backward = false
-        if (e.code === 'KeyA') move.left = false
-        if (e.code === 'KeyD') move.right = false
-        if (e.code === 'Space') move.up = false
-        if (e.code === 'KeyF') toggleCubeInFront()
-        const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
-        if (e.code === goDownKey) move.down = false
-    });
-
-    function clearScene() {
+    clearScene() {
         cubes.forEach((value, key) => {
             removeCubeAt(value.position.x, value.position.y, value.position.z)
         })
@@ -483,11 +489,11 @@ class Game {
         nandCubes.clear()
     }
 
-    function isThereCubeAt(x, y, z) {
-        return cubes.has(js([x, y, z]))
+    isThereCubeAt(x, y, z) {
+        return this.cubes.has(document.__global_game.js([x, y, z]))
     }
 
-    function addCubeAt(x, y, z, hex, broadcast = true) {
+    addCubeAt(x, y, z, hex, broadcast = true) {
         console.log(hex)
         const hexColor = new THREE.Color(hex).getHex()
         const material = new THREE.MeshLambertMaterial({ color: hexColor })
@@ -497,162 +503,122 @@ class Game {
         cube.position.y = y
         cube.position.z = z
 
-        scene.add(cube)
+        this.scene.add(cube)
 
-        cubes.set(js([x, y, z]), cube)
-
-        if (hexColor == NandHexColor) {
-            nandCubes.set(js([x, y, z]), [x, y, z])
-        }
-        else if (hexColor == SignalHexColor) {
-            signalCubes.add(js([x, y, z]))
-        }
+        this.cubes.set(this.js([x, y, z]), cube)
 
         if (broadcast) {
-            sendAddCube(x, y, z, hex)
+            this.sendAddCube(x, y, z, hex)
         }
     }
 
-    function removeCubeAt(x, y, z, broadcast = true) {
-        const cube = cubes.get(js([x, y, z]))
-        scene.remove(cube)
-        cubes.delete(js([x, y, z]))
-        nandCubes.delete(js([x, y, z]))
-        signalCubes.delete(js([x, y, z]))
+    removeCubeAt(x, y, z, broadcast = true) {
+        const cube = document.__global_game.cubes.get(document.__global_game.js([x, y, z]))
+        document.__global_game.scene.remove(cube)
+        document.__global_game.cubes.delete(document.__global_game.js([x, y, z]))
+        document.__global_game.nandCubes.delete(document.__global_game.js([x, y, z]))
+        document.__global_game.signalCubes.delete(document.__global_game.js([x, y, z]))
         if (broadcast) {
-            sendRemoveCube(x, y, z)
+            document.__global_game.sendRemoveCube(x, y, z)
         }
     }
 
-    function toggleCubeAt(x, y, z, hex) {
-        if (isThereCubeAt(x, y, z)) {
-            removeCubeAt(x, y, z)
+    toggleCubeAt(x, y, z, hex) {
+        if (document.__global_game.isThereCubeAt(x, y, z)) {
+            document.__global_game.removeCubeAt(x, y, z)
         }
         else {
-            addCubeAt(x, y, z, hex)
+            document.__global_game.addCubeAt(x, y, z, hex)
         }
     }
 
-    function toggleCubeInFront() {
+    toggleCubeInFront() {
         const distance = 3;
         const dir = new THREE.Vector3()
-        camera.getWorldDirection(dir)
+        document.__global_game.camera.getWorldDirection(dir)
 
         const position = new THREE.Vector3()
-        position.copy(camera.position).add(dir.multiplyScalar(distance))
+        position.copy(document.__global_game.camera.position).add(dir.multiplyScalar(distance))
 
         position.x = Math.round(position.x)
         position.y = Math.round(position.y)
         position.z = Math.round(position.z)
 
-        const hexColor = new THREE.Color(options.cubeColor).getHex()
+        const hexColor = new THREE.Color(document.__global_game.options.cubeColor).getHex()
 
-        toggleCubeAt(position.x, position.y, position.z, hexColor)
+        document.__global_game.toggleCubeAt(position.x, position.y, position.z, hexColor)
     }
 
-    const gui = new GUI()
-    const options = {
-        grid: false,
-        axes: false,
-        cubeColor: '#ffffff',
-        cursorVisible: true,
-        speed: 10,
-        backgroundColor: '#000000',
-        language: 'en',
-    }
+    step() {
+        const self = document.__global_game
+        requestAnimationFrame(document.__global_game.step)
 
-    document.__global_options = options
+        const delta = self.clock.getDelta()
 
-    if (fullMenu) {
-        const langController = gui.add(options, 'language', { English: 'en', Русский: 'ru' })
-        .name(i18n[options.language].Language)
-        .onChange(() => {
-            translateGUI();
-        })
-    }
+        self.direction.z = Number(self.move.forward) - Number(self.move.backward)
+        self.direction.x = Number(self.move.right) - Number(self.move.left)
+        self.direction.normalize();
 
-    const colorController = gui.addColor(options, 'cubeColor').name(i18n[options.language].cubeColor)
-
-    if (fullMenu) {
-        const cursorController = gui.add(options, 'cursorVisible').name(i18n[options.language].showCursor)
-        const backgroundColorController = gui.addColor(options, 'backgroundColor')
-        .name(i18n[options.language].background)
-        .onChange(color => renderer.setClearColor(color));
-        const speedController = gui.add(options, 'speed', 0.1, 100, 0.1).name(i18n[options.language].moveSpeed)
-        const saveController = gui.add({ save: saveSceneToFile }, 'save').name(i18n[options.language].saveScene)
-    }
-
-    const clock = new THREE.Clock()
-
-    function step() {
-        requestAnimationFrame(step)
-
-        const delta = clock.getDelta()
-
-        direction.z = Number(move.forward) - Number(move.backward)
-        direction.x = Number(move.right) - Number(move.left)
-        direction.normalize();
-
-        handleCameraRotation(rightJoystick.normalizedX * 10, -rightJoystick.normalizedY * 10)
+        self.handleCameraRotation(self.rightJoystick.normalizedX * 10, -self.rightJoystick.normalizedY * 10)
 
         if (
-            controls.isLocked ||
-            leftJoystick.isDragging ||
-            rightJoystick.isDragging
+            self.controls.isLocked ||
+            self.leftJoystick.isDragging ||
+            self.rightJoystick.isDragging
         ) {
-            velocity.x = direction.x * options.speed * delta
-            velocity.z = direction.z * options.speed * delta
-            velocity.y = move.up ? options.speed * delta : 0
-            if (!move.up) {
-                velocity.y = move.down ? -options.speed * delta : 0
+            self.velocity.x = self.direction.x * self.options.speed * delta
+            self.velocity.z = self.direction.z * self.options.speed * delta
+            self.velocity.y = self.move.up ? self.options.speed * delta : 0
+            if (!self.move.up) {
+                self.velocity.y = self.move.down ? -self.options.speed * delta : 0
             }
 
-            controls.moveRight(velocity.x)
-            controls.moveForward(velocity.z)
-            camera.position.y += velocity.y
+            self.controls.moveRight(self.velocity.x)
+            self.controls.moveForward(self.velocity.z)
+            self.camera.position.y += self.velocity.y
         }
 
         const now = Date.now()
         if (
-            wsPlayers &&
-            wsPlayers.readyState === wsPlayers.OPEN &&
-            myUUID &&
-            now - lastMoveSendTime > PLAYER_MOVE_SEND_INTERVAL_MS
+            self.wsPlayers &&
+            self.wsPlayers.readyState === self.wsPlayers.OPEN &&
+            self.myUUID &&
+            now - self.lastMoveSendTime > self.PLAYER_MOVE_SEND_INTERVAL_MS
         ) {
-            const currentPos = camera.position
+            const currentPos = self.camera.position
 
-            if (!lastSentPosition.equals(currentPos)) {
-                wsPlayers.send(JSON.stringify({
+            if (!self.lastSentPosition.equals(currentPos)) {
+                document.__global_game.wsPlayers.send(JSON.stringify({
                     method: 'playerMove',
-                    playerUUID: myUUID,
+                    playerUUID: document.__global_game.myUUID,
                     x: currentPos.x,
                     y: currentPos.y,
                     z: currentPos.z
                 }))
-                lastSentPosition.copy(currentPos)
-                lastMoveSendTime = now
+                self.lastSentPosition.copy(currentPos)
+                self.lastMoveSendTime = now
             }
         }
 
         const dir = new THREE.Vector3()
-        camera.getWorldDirection(dir)
-        const pos = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(3))
+        self.camera.getWorldDirection(dir)
+        const pos = new THREE.Vector3().copy(self.camera.position).add(dir.multiplyScalar(3))
         pos.x = Math.round(pos.x)
         pos.y = Math.round(pos.y)
         pos.z = Math.round(pos.z)
-        cursorCube.position.copy(pos)
-        cursorMaterial.color.set(options.cubeColor)
-        cursorMaterial.opacity = options.cursorVisible ? 0.5 : 0.0
-        cursorMaterial.visible = options.cursorVisible
+        self.cursorCube.position.copy(pos)
+        self.cursorMaterial.color.set(self.options.cubeColor)
+        self.cursorMaterial.opacity = self.options.cursorVisible ? 0.5 : 0.0
+        self.cursorMaterial.visible = self.options.cursorVisible
 
-        renderer.setClearColor(options.backgroundColor)
-        renderer.render(scene, camera)
+        self.renderer.setClearColor(self.options.backgroundColor)
+        self.renderer.render(self.scene, self.camera)
 
-        leftJoystick.draw()
-        rightJoystick.draw()
+        self.leftJoystick.draw(self.options)
+        self.rightJoystick.draw(self.options)
     }
 
-    function translateGUI() {
+    translateGUI() {
         colorController.name(i18n[options.language].cubeColor)
         cursorController.name(i18n[options.language].showCursor)
         backgroundColorController.name(i18n[options.language].background)
@@ -662,7 +628,7 @@ class Game {
         langController.updateDisplay()
     }
 
-    function saveSceneToFile() {
+    saveSceneToFile() {
         const cameraData = {
             position: [camera.position.x, camera.position.y, camera.position.z],
             rotation: [camera.rotation.x, camera.rotation.y, camera.rotation.z]
@@ -694,7 +660,7 @@ class Game {
         URL.revokeObjectURL(url)
     }
 
-    const positionMenu = () => {
+    positionMenu = () => {
         if (!fullMenu) {
             if (window.innerWidth / window.innerHeight < 1) {
                 document.getElementsByClassName("lil-gui")[0].style.scale =  window.innerWidth < 400 ? 1 : 2
@@ -705,26 +671,7 @@ class Game {
             }
         }
     }
-
-    positionMenu()
-    connectWebSocket()
-    step()
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight
-        camera.updateProjectionMatrix()
-        renderer.setSize(window.innerWidth, window.innerHeight)
-        positionJoysticks()
-        positionMenu()
-    })
-
-    setTimeout(()=> {
-        const companySplash = document.getElementById("companySplash")
-        companySplash.style.display = 'none'
-        sdkIntegration.handleGameStart()
-    }, companySplashTimeout)
-
-    if (mustOpenSiteOnCompanyLogoTap) {
-        document.getElementById("companySplash").style.cursor = "pointer"
-    }
 }
+
+const game = new Game()
+game.start()
