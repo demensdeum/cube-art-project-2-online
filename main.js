@@ -144,7 +144,7 @@ class Game {
                     if (e.code === 'KeyA') document.__global_game.move.left = true
                         if (e.code === 'KeyD') document.__global_game.move.right = true
                             if (e.code === 'Space') document.__global_game.move.up = true
-                                const goDownKey = document.__global_game.noHotkeys ? 'KeyC' : 'ControlLeft'
+                                const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
                                 if (e.code === goDownKey) document.__global_game.move.down = true
         });
 
@@ -155,7 +155,7 @@ class Game {
                             if (e.code === 'KeyD') document.__global_game.move.right = false
                                 if (e.code === 'Space') document.__global_game.move.up = false
                                     if (e.code === 'KeyF') document.__global_game.toggleCubeInFront()
-                                        const goDownKey = document.__global_game.noHotkeys ? 'KeyC' : 'ControlLeft'
+                                        const goDownKey = noHotkeys ? 'KeyC' : 'ControlLeft'
                                         if (e.code === goDownKey) document.__global_game.move.down = false
             });
 
